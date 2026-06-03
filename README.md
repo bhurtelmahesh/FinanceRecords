@@ -1,6 +1,6 @@
 # Finance Records
 
-Independent local macOS finance records app. It can import your old `Salary.xlsx` once, but day-to-day use is inside the app.
+macOS finance records app for income, savings, debt, overtime, stock wins, daily records, and document archives.
 
 ## Open The App
 
@@ -24,7 +24,7 @@ Create an unpacked local build:
 npm run pack
 ```
 
-Create a DMG/ZIP for direct Mac distribution:
+Create a ZIP for direct Mac distribution:
 
 ```bash
 npm run dist
@@ -38,17 +38,21 @@ npm run dist:mas
 
 ## What It Includes
 
-- Dashboard with salary, savings, stock revenue, and personal balance KPIs
+- Dashboard with salary, savings, stock revenue, and debt KPIs
 - Financial snapshot insights
 - Salary and savings records
 - Monthly salary details with allowances, overtime, deductions, and received amount
 - Overtime records
 - Stock revenue target and actual tracking
 - Daily records
-- Personal balance records
-- Optional Excel import from `Salary.xlsx`
+- Debt records
+- Salary sheet archive
+- Unpaid bills archive with PDF/image preview
+- Optional Excel workbook import
 - Optional Excel export backup from the current app data
 - Start blank option for new users
+- Demo data option for screenshots and evaluation
+- Clear all data option with backup warning
 - Search across records
 
 ## Data Storage
@@ -59,9 +63,15 @@ The app saves local records in:
 ~/Library/Application Support/Finance Records/finance-data.json
 ```
 
-Your original `Salary.xlsx` can remain in the same folder, but the app does not depend on Excel after import.
-
 During development, if an older `finance-data.json` exists in this project folder, the app copies it into the app data folder on first launch.
+
+For release screenshots or clean testing, run:
+
+```bash
+npm run publish:preview
+```
+
+This uses a separate empty app data folder and does not load development records.
 
 ## App Store Preparation
 

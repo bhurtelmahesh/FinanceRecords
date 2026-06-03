@@ -2,9 +2,8 @@ node_modules/
 dist/
 *.log
 .DS_Store
-Salary.xlsx
+*.xlsx
 finance-data.json
-FinanceRecords-*.xlsx
 embedded.provisionprofile
 *.dmg
 *.zip

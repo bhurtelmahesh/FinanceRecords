@@ -2,7 +2,7 @@
 
 Effective Date: Add date
 
-Finance Records is designed as a local-first finance record app.
+Finance Records is designed as a finance record app for macOS.
 
 ## Data Collection
 
@@ -10,7 +10,7 @@ Finance Records does not collect, transmit, sell, or share personal finance data
 
 ## Local Storage
 
-Records entered in the app are stored locally on the user's Mac using the app's local data storage. Users may choose to import an Excel workbook or export an Excel backup through standard macOS file dialogs.
+Records entered in the app are stored on the user's Mac using the app's data storage. Users may choose to import an Excel workbook, archive salary sheets or unpaid bill documents, preview supported PDFs/images, or export an Excel backup through standard macOS file dialogs.
 
 ## Network Access
 
@@ -23,4 +23,3 @@ Finance Records does not send user data to third-party services.
 ## Contact
 
 Add support contact information here.
-

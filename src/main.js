@@ -1,17 +1,26 @@
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { pathToFileURL } = require('url');
 const XLSX = require('xlsx');
 
+const publishPreview = process.argv.includes('--publish-preview');
+const appDataName = publishPreview ? 'Finance Records Publish Preview' : 'Finance Records';
+
 app.setName('Finance Records');
-app.setPath('userData', path.join(app.getPath('appData'), 'Finance Records'));
+app.setPath('userData', path.join(app.getPath('appData'), appDataName));
 
 const projectDir = path.join(app.getPath('documents'), 'Finance');
 const legacyDataPath = path.join(projectDir, 'finance-data.json');
 const dataDir = app.getPath('userData');
 const dataPath = path.join(dataDir, 'finance-data.json');
-const defaultExcelPath = path.join(projectDir, 'Salary.xlsx');
+const salarySheetsDir = path.join(dataDir, 'salary-sheets');
+const unpaidBillsDir = path.join(dataDir, 'unpaid-bills');
 const iconPath = path.join(app.getAppPath(), 'build', 'app-icon.icns');
+
+function resourcePath(...parts) {
+  return path.join(process.resourcesPath || app.getAppPath(), ...parts);
+}
 
 function monthName(value) {
   if (!value) return '';
@@ -52,8 +61,77 @@ function emptyData() {
     overtime: [],
     stockRevenue: [],
     daily: [],
-    personalBalances: []
+    personalBalances: [],
+    salarySheets: [],
+    unpaidBills: []
   };
+}
+
+function safeFileName(name) {
+  return String(name || 'salary-sheet')
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180) || 'salary-sheet';
+}
+
+function safeStoredFilePath(baseDir, storedName) {
+  if (typeof storedName !== 'string' || !storedName || storedName !== path.basename(storedName)) return null;
+  const resolvedBase = path.resolve(baseDir);
+  const resolved = path.resolve(resolvedBase, storedName);
+  if (!resolved.startsWith(resolvedBase + path.sep)) return null;
+  return resolved;
+}
+
+function archiveSalarySheets(filePaths) {
+  fs.mkdirSync(salarySheetsDir, { recursive: true });
+  return (filePaths || [])
+    .filter((filePath) => filePath && fs.existsSync(filePath) && fs.statSync(filePath).isFile())
+    .map((filePath) => {
+      const originalName = path.basename(filePath);
+      const ext = path.extname(originalName);
+      const base = safeFileName(path.basename(originalName, ext));
+      const storedName = `${Date.now()}-${Math.random().toString(16).slice(2)}-${base}${ext}`;
+      const destination = path.join(salarySheetsDir, storedName);
+      fs.copyFileSync(filePath, destination);
+      return {
+        id: safeId('salary-sheet'),
+        originalName,
+        storedName,
+        size: fs.statSync(destination).size,
+        savedAt: new Date().toISOString()
+      };
+    });
+}
+
+function archiveUnpaidBills(entries) {
+  fs.mkdirSync(unpaidBillsDir, { recursive: true });
+  return (entries || [])
+    .filter((entry) => entry?.path && fs.existsSync(entry.path) && fs.statSync(entry.path).isFile())
+    .map((entry) => {
+      const originalName = path.basename(entry.path);
+      const ext = path.extname(originalName);
+      const base = safeFileName(entry.title || path.basename(originalName, ext));
+      const storedName = `${Date.now()}-${Math.random().toString(16).slice(2)}-${base}${ext}`;
+      const destination = path.join(unpaidBillsDir, storedName);
+      fs.copyFileSync(entry.path, destination);
+      return {
+        id: safeId('unpaid-bill'),
+        title: String(entry.title || path.basename(originalName, ext)).trim(),
+        originalName,
+        storedName,
+        size: fs.statSync(destination).size,
+        savedAt: new Date().toISOString()
+      };
+    });
+}
+
+function salarySheetPath(storedName) {
+  return safeStoredFilePath(salarySheetsDir, storedName);
+}
+
+function unpaidBillPath(storedName) {
+  return safeStoredFilePath(unpaidBillsDir, storedName);
 }
 
 function parseYearSummary(workbook, year) {
@@ -184,7 +262,7 @@ function parseDaily(workbook) {
         month,
         day,
         amount: typeof value === 'number' ? value : 0,
-        status: typeof value === 'number' ? 'recorded' : String(value),
+        status: typeof value === 'number' ? 'Realized' : String(value),
         note: typeof value === 'number' ? '' : String(value)
       });
     }
@@ -217,7 +295,9 @@ function parseOvertime(workbook) {
 }
 
 function parsePersonalBalances(workbook) {
-  const sheet = workbook.Sheets.didi;
+  const sheetName = ['Debts', 'Debt Records', 'Bills', 'Personal Balances']
+    .find((name) => workbook.Sheets[name]);
+  const sheet = sheetName ? workbook.Sheets[sheetName] : null;
   if (!sheet) return [];
   const rows = sheetRows(sheet);
   const result = [];
@@ -227,7 +307,7 @@ function parsePersonalBalances(workbook) {
     if (String(row[1] || '').toLowerCase() === 'total') continue;
     result.push({
       id: safeId('balance'),
-      group: monthName(row[0]) || 'didi',
+      group: monthName(row[0]) || 'Debt',
       dateOrLabel: row[1] instanceof Date ? row[1].toISOString().slice(0, 10) : monthName(row[1]),
       amount: num(row[2]),
       note: ''
@@ -257,13 +337,20 @@ function importExcel(filePath) {
 }
 
 function loadData() {
-  if (!fs.existsSync(dataPath) && fs.existsSync(legacyDataPath)) {
+  if (!publishPreview && !fs.existsSync(dataPath) && fs.existsSync(legacyDataPath)) {
     fs.mkdirSync(dataDir, { recursive: true });
     fs.copyFileSync(legacyDataPath, dataPath);
+  }
+  const seededDataPath = resourcePath('seed-data', 'finance-data.json');
+  if (!fs.existsSync(dataPath) && fs.existsSync(seededDataPath)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.copyFileSync(seededDataPath, dataPath);
   }
   if (fs.existsSync(dataPath)) {
     const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
     data.meta = Object.assign({}, data.meta || {}, { dataPath });
+    data.salarySheets = data.salarySheets || [];
+    data.unpaidBills = data.unpaidBills || [];
     if (!data.meta.startedAt) data.meta.startedAt = data.meta.importedAt || data.meta.updatedAt || new Date().toISOString();
     if (!data.meta.updatedAt) data.meta.updatedAt = data.meta.startedAt;
     return data;
@@ -278,6 +365,16 @@ function saveData(data) {
   fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
 }
 
+function clearAllData() {
+  if (fs.existsSync(dataPath)) fs.unlinkSync(dataPath);
+  fs.rmSync(salarySheetsDir, { recursive: true, force: true });
+  fs.rmSync(unpaidBillsDir, { recursive: true, force: true });
+  const data = emptyData();
+  data.meta.startedAt = new Date().toISOString();
+  saveData(data);
+  return data;
+}
+
 function exportExcel(data, outputPath) {
   const wb = XLSX.utils.book_new();
   const addSheet = (name, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), name);
@@ -286,7 +383,9 @@ function exportExcel(data, outputPath) {
   addSheet('Overtime', data.overtime || []);
   addSheet('Stock Revenue', data.stockRevenue || []);
   addSheet('Daily', data.daily || []);
-  addSheet('Personal Balances', data.personalBalances || []);
+  addSheet('Debts', data.personalBalances || []);
+  addSheet('Salary Sheets Archive', data.salarySheets || []);
+  addSheet('Unpaid Bills Archive', data.unpaidBills || []);
   XLSX.writeFile(wb, outputPath);
   return outputPath;
 }
@@ -302,8 +401,15 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true
     }
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', (event, url) => {
+    const appUrl = pathToFileURL(path.join(__dirname, 'renderer', 'index.html')).toString();
+    if (url !== appUrl) event.preventDefault();
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
@@ -327,10 +433,11 @@ ipcMain.handle('data:startBlank', () => {
   saveData(data);
   return data;
 });
+ipcMain.handle('data:clearAll', () => clearAllData());
 ipcMain.handle('data:importExcel', async () => {
   const result = await dialog.showOpenDialog({
     title: 'Import finance workbook',
-    defaultPath: fs.existsSync(defaultExcelPath) ? defaultExcelPath : projectDir,
+    defaultPath: app.getPath('documents'),
     filters: [{ name: 'Excel', extensions: ['xlsx', 'xls'] }],
     properties: ['openFile']
   });
@@ -346,4 +453,64 @@ ipcMain.handle('data:exportExcel', async (_event, data) => {
   if (result.canceled || !result.filePath) return null;
   saveData(data);
   return exportExcel(data, result.filePath);
+});
+ipcMain.handle('salarySheets:addFromPaths', (_event, filePaths) => archiveSalarySheets(filePaths));
+ipcMain.handle('salarySheets:chooseAndAdd', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Save salary sheets',
+    defaultPath: projectDir,
+    filters: [
+      { name: 'Documents', extensions: ['xlsx', 'xls', 'numbers', 'pdf', 'csv', 'txt'] },
+      { name: 'All Files', extensions: ['*'] }
+    ],
+    properties: ['openFile', 'multiSelections']
+  });
+  if (result.canceled || !result.filePaths.length) return [];
+  return archiveSalarySheets(result.filePaths);
+});
+ipcMain.handle('salarySheets:open', async (_event, storedName) => {
+  const filePath = salarySheetPath(storedName);
+  if (!filePath || !fs.existsSync(filePath)) return 'File not found';
+  const error = await shell.openPath(filePath);
+  return error || '';
+});
+ipcMain.handle('salarySheets:previewUrl', (_event, storedName) => {
+  const filePath = salarySheetPath(storedName);
+  if (!filePath || !fs.existsSync(filePath)) return '';
+  return pathToFileURL(filePath).toString();
+});
+ipcMain.handle('salarySheets:delete', (_event, storedName) => {
+  const filePath = salarySheetPath(storedName);
+  if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  return true;
+});
+ipcMain.handle('unpaidBills:chooseFiles', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Save unpaid bill documents',
+    defaultPath: projectDir,
+    filters: [
+      { name: 'Bills', extensions: ['pdf', 'png', 'jpg', 'jpeg', 'heic', 'webp', 'xlsx', 'xls', 'numbers', 'txt'] },
+      { name: 'All Files', extensions: ['*'] }
+    ],
+    properties: ['openFile', 'multiSelections']
+  });
+  if (result.canceled || !result.filePaths.length) return [];
+  return result.filePaths;
+});
+ipcMain.handle('unpaidBills:add', (_event, entries) => archiveUnpaidBills(entries));
+ipcMain.handle('unpaidBills:open', async (_event, storedName) => {
+  const filePath = unpaidBillPath(storedName);
+  if (!filePath || !fs.existsSync(filePath)) return 'File not found';
+  const error = await shell.openPath(filePath);
+  return error || '';
+});
+ipcMain.handle('unpaidBills:previewUrl', (_event, storedName) => {
+  const filePath = unpaidBillPath(storedName);
+  if (!filePath || !fs.existsSync(filePath)) return '';
+  return pathToFileURL(filePath).toString();
+});
+ipcMain.handle('unpaidBills:delete', (_event, storedName) => {
+  const filePath = unpaidBillPath(storedName);
+  if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  return true;
 });
