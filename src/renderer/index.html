@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Finance Records</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="setupOverlay" class="setup-overlay" hidden>
+    <section class="setup-card">
+      <div class="brand-mark">¥</div>
+      <h1>Finance Records</h1>
+      <p>Track salary, savings, revenue, overtime, and personal balances without living in spreadsheets.</p>
+      <div class="setup-actions">
+        <button id="startBlank">Start Blank</button>
+        <button id="setupImportExcel">Import Old Excel</button>
+      </div>
+      <small>Excel import is optional. Your records are saved locally on this Mac.</small>
+    </section>
+  </div>
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">¥</div>
+      <div>
+        <h1>Finance Records</h1>
+        <p>Independent local ledger</p>
+      </div>
+    </div>
+    <nav id="nav">
+      <button data-view="dashboard" class="active">Dashboard</button>
+      <button data-view="salary">Salary & Savings</button>
+      <button data-view="details">Monthly Details</button>
+      <button data-view="overtime">Overtime</button>
+      <button data-view="stocks">Stock Revenue</button>
+      <button data-view="daily">Daily Records</button>
+      <button data-view="balances">Personal Balances</button>
+      <button data-view="data">Data & Backup</button>
+    </nav>
+    <div class="sidebar-actions">
+      <button id="importExcel">Import Old Excel</button>
+      <button id="exportExcel">Export Backup</button>
+    </div>
+  </aside>
+
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Local-first finance app</p>
+        <h2 id="viewTitle">Dashboard</h2>
+      </div>
+      <div class="top-actions">
+        <input id="globalSearch" type="search" placeholder="Search records">
+        <span id="saveState">Loading...</span>
+        <button id="saveNow">Save</button>
+      </div>
+    </header>
+
+    <section id="dashboard" class="view active">
+      <div class="kpi-grid" id="kpis"></div>
+      <div class="dashboard-grid">
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Salary vs Savings</h3>
+            <select id="dashboardYear"></select>
+          </div>
+          <canvas id="salaryChart" width="760" height="280"></canvas>
+        </section>
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Stock Revenue Target</h3>
+          </div>
+          <canvas id="stockChart" width="520" height="280"></canvas>
+        </section>
+      </div>
+      <section class="panel insights-panel">
+        <div class="panel-head">
+          <h3>Financial Snapshot</h3>
+        </div>
+        <div id="insights" class="insights"></div>
+      </section>
+    </section>
+
+    <section id="salary" class="view">
+      <div class="toolbar">
+        <select id="salaryYearFilter"></select>
+        <button data-add="salary">Add Salary Month</button>
+      </div>
+      <div id="salaryTable"></div>
+    </section>
+
+    <section id="details" class="view">
+      <div class="toolbar">
+        <select id="detailsYearFilter"></select>
+        <button data-add="monthlyDetails">Add Monthly Detail</button>
+      </div>
+      <div id="detailsTable"></div>
+    </section>
+
+    <section id="overtime" class="view">
+      <div class="ot-layout">
+        <section class="panel ot-entry-panel">
+          <div class="panel-head">
+            <h3>Daily OT Entry</h3>
+            <button data-add="overtime">Advanced Add</button>
+          </div>
+          <form id="otQuickForm" class="ot-form">
+            <label>
+              <span>Year</span>
+              <input id="otYear" type="number" min="2000" max="2100" required>
+            </label>
+            <label>
+              <span>Month</span>
+              <select id="otMonth" required></select>
+            </label>
+            <label>
+              <span>Day</span>
+              <input id="otDay" type="number" min="1" max="31" required>
+            </label>
+            <label>
+              <span>OT Hours</span>
+              <input id="otHours" type="number" min="0" step="0.25" required>
+            </label>
+            <label>
+              <span>Misc OT</span>
+              <input id="otMiscHours" type="number" min="0" step="0.25" value="0">
+            </label>
+            <label>
+              <span>Rate</span>
+              <input id="otRate" type="number" min="0" step="1" required>
+            </label>
+            <label class="wide">
+              <span>Note</span>
+              <input id="otNote" type="text" placeholder="Optional memo">
+            </label>
+            <button>Add Daily OT</button>
+          </form>
+        </section>
+        <section class="panel ot-summary-panel">
+          <div class="panel-head">
+            <h3 id="otSummaryTitle">Monthly OT Summary</h3>
+            <div class="ot-filter">
+              <select id="otYearFilter"></select>
+              <select id="otMonthFilter"></select>
+            </div>
+          </div>
+          <div id="otSummary" class="ot-summary"></div>
+        </section>
+      </div>
+      <div id="overtimeTable"></div>
+    </section>
+
+    <section id="stocks" class="view">
+      <div class="toolbar">
+        <select id="stockYearFilter"></select>
+        <button data-add="stockRevenue">Add Stock Month</button>
+      </div>
+      <div id="stockTable"></div>
+    </section>
+
+    <section id="daily" class="view">
+      <div class="toolbar">
+        <select id="dailyMonthFilter"></select>
+        <button data-add="daily">Add Daily Record</button>
+      </div>
+      <div id="dailyTable"></div>
+    </section>
+
+    <section id="balances" class="view">
+      <div class="toolbar">
+        <button data-add="personalBalances">Add Balance Record</button>
+      </div>
+      <div id="balanceTable"></div>
+    </section>
+
+    <section id="data" class="view">
+      <div class="data-grid">
+        <section class="panel">
+          <h3>Local Data</h3>
+          <p class="muted">Finance Records is independent from Excel. It saves the app database locally and only uses Excel when you choose to import or export.</p>
+          <dl class="meta-list">
+            <dt>Database</dt><dd id="dataPathText">-</dd>
+            <dt>Started</dt><dd id="startedAtText">-</dd>
+            <dt>Last Updated</dt><dd id="updatedAtText">-</dd>
+            <dt>Imported From</dt><dd id="sourceFileText">None</dd>
+          </dl>
+        </section>
+        <section class="panel">
+          <h3>Backup Tools</h3>
+          <div class="backup-actions">
+            <button id="dataImportExcel">Import Old Excel</button>
+            <button id="dataExportExcel">Export Excel Backup</button>
+          </div>
+          <p class="muted">Importing replaces the current app records with workbook data. Exporting creates a spreadsheet backup of the app records.</p>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="recordDialog">
+    <form method="dialog" id="recordForm">
+      <header>
+        <h3 id="dialogTitle">Edit record</h3>
+        <button value="cancel" class="icon-button" aria-label="Close">×</button>
+      </header>
+      <div id="dialogFields" class="dialog-fields"></div>
+      <footer>
+        <button value="cancel" type="button" id="cancelDialog">Cancel</button>
+        <button value="save" id="confirmDialog">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <script src="./renderer.js"></script>
+</body>
+</html>

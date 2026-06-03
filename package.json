@@ -1,0 +1,62 @@
+{
+  "name": "finance-records",
+  "version": "1.0.0",
+  "description": "Local-first personal finance records app for macOS",
+  "author": "Maheshwor Bhurtel",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --mac zip",
+    "dist:dmg": "electron-builder --mac dmg",
+    "dist:mas": "electron-builder --mac mas",
+    "dist:mas-dev": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac mas"
+  },
+  "build": {
+    "appId": "com.mahesh.finance-records",
+    "productName": "Finance Records",
+    "copyright": "Copyright © 2026",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "build/app-icon.icns",
+      "package.json",
+      "!Salary.xlsx",
+      "!finance-data.json",
+      "!FinanceRecords-*.xlsx",
+      "!docs/app-store/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.finance",
+      "icon": "build/app-icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements/mac.plist",
+      "entitlementsInherit": "build/entitlements/mac-inherit.plist",
+      "target": [
+        "zip"
+      ]
+    },
+    "mas": {
+      "category": "public.app-category.finance",
+      "icon": "build/app-icon.icns",
+      "hardenedRuntime": false,
+      "entitlements": "build/entitlements/mas.plist",
+      "entitlementsInherit": "build/entitlements/mas-inherit.plist",
+      "provisioningProfile": "embedded.provisionprofile",
+      "target": [
+        "mas"
+      ]
+    }
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^26.8.1"
+  }
+}
