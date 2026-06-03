@@ -23,7 +23,7 @@ Finance Records is a desktop finance tracker for macOS. It brings salary, saving
 
 - Records are saved in the app data folder on the Mac.
 - Salary sheet files are copied into the app data folder.
-- Unpaid bill files are copied into the app data folder after the user enters a title.
+- Unpaid bill files are copied into the app data folder and named from the original file name.
 - Excel export creates a backup workbook.
 - Import replaces current records with the selected workbook data.
 
@@ -33,4 +33,3 @@ Finance Records is a desktop finance tracker for macOS. It brings salary, saving
 - Renderer security hardened with context isolation, disabled Node integration, sandboxing, navigation blocking, and Content Security Policy.
 - User data files are excluded from the packaged app.
 - Demo data and publish-preview support are available for screenshots and checks.
-

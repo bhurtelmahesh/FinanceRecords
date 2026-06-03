@@ -144,7 +144,7 @@ Functions:
 Bill upload flow:
 
 1. Add or drop a bill file.
-2. Enter a title when prompted.
+2. The app saves it using the file name as the bill title.
 3. The file appears under **Saved bill files**.
 4. Use Preview or Open to view the file later.
 
@@ -203,4 +203,3 @@ Available actions:
 - **Preview**: Available for image/PDF files.
 - **Open**: Available for all saved files.
 - **Delete**: Removes the saved file.
-

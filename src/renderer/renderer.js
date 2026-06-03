@@ -1265,13 +1265,11 @@ async function addSalarySheetsFromPaths(paths) {
 }
 
 async function addUnpaidBillsFromPaths(paths) {
-  const entries = [];
-  for (const filePath of paths) {
+  const entries = paths.map((filePath) => {
     const fileName = filePath.split(/[\\/]/).pop() || 'Unpaid bill';
     const defaultTitle = fileName.replace(/\.[^.]+$/, '');
-    const title = prompt(`Title for this unpaid bill: ${fileName}`, defaultTitle);
-    if (title && title.trim()) entries.push({ path: filePath, title: title.trim() });
-  }
+    return { path: filePath, title: defaultTitle };
+  });
   if (!entries.length) return;
   const savedBills = await window.financeApi.addUnpaidBills(entries);
   if (!savedBills.length) return;
