@@ -884,6 +884,7 @@ function renderData() {
 
 function renderSalarySheets() {
   const sheets = state.salarySheets || [];
+  document.getElementById('salarySheetCount').textContent = `${sheets.length} ${sheets.length === 1 ? 'file' : 'files'}`;
   document.getElementById('salarySheetList').innerHTML = sheets.length ? sheets
     .slice()
     .sort((a, b) => String(b.savedAt || '').localeCompare(String(a.savedAt || '')))
@@ -899,11 +900,12 @@ function renderSalarySheets() {
           <button class="delete" data-delete-salary-sheet="${escapeHtml(sheet.id)}">Delete</button>
         </div>
       </div>
-    `).join('') : '<p class="muted">No salary sheets saved yet.</p>';
+    `).join('') : '<p class="muted archive-empty">No salary files saved yet. Add files or drag and drop them above, then saved files will appear here.</p>';
 }
 
 function renderUnpaidBills() {
   const bills = state.unpaidBills || [];
+  document.getElementById('unpaidBillCount').textContent = `${bills.length} ${bills.length === 1 ? 'file' : 'files'}`;
   document.getElementById('unpaidBillList').innerHTML = bills.length ? bills
     .slice()
     .sort((a, b) => String(b.savedAt || '').localeCompare(String(a.savedAt || '')))
@@ -919,7 +921,7 @@ function renderUnpaidBills() {
           <button class="delete" data-delete-unpaid-bill="${escapeHtml(bill.id)}">Delete</button>
         </div>
       </div>
-    `).join('') : '<p class="muted">No unpaid bill documents saved yet.</p>';
+    `).join('') : '<p class="muted archive-empty">No unpaid bill files saved yet. Add files or drag and drop them above, then saved bills will appear here.</p>';
 }
 
 function render() {

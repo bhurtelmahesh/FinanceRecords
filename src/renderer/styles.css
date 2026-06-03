@@ -507,6 +507,45 @@ canvas {
   margin-top: 12px;
 }
 
+.archive-list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.archive-list-head strong,
+.archive-list-head span {
+  display: block;
+}
+
+.archive-list-head span {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.archive-list-head b {
+  flex: 0 0 auto;
+  color: #24546a;
+  font-size: 12px;
+  background: #e8f4f8;
+  border-radius: 999px;
+  padding: 5px 9px;
+}
+
+.archive-empty {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfdff;
+}
+
 .salary-sheet-item {
   display: grid;
   grid-template-columns: 1fr auto;
