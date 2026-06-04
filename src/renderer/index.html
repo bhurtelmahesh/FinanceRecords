@@ -15,9 +15,10 @@
         <p>Track income, savings, stock wins, overtime, daily records, and debts without living in spreadsheets.</p>
       <div class="setup-actions">
         <button id="startBlank">Start Blank</button>
+        <button id="setupImportBackup">Import Backup</button>
         <button id="setupImportExcel">Import Workbook</button>
       </div>
-      <small>Excel import is optional. You can start blank or bring in your workbook.</small>
+      <small>Start blank, restore an app backup, or bring in an Excel workbook.</small>
     </section>
   </div>
 
@@ -40,8 +41,10 @@
       <button data-view="data">Backup & Import</button>
     </nav>
     <div class="sidebar-actions">
+      <button id="importBackup">Import Backup</button>
+      <button id="exportBackup">Export Backup</button>
       <button id="importExcel">Import Workbook</button>
-      <button id="exportExcel">Export Backup</button>
+      <button id="exportExcel">Export Excel</button>
     </div>
   </aside>
 
@@ -205,14 +208,16 @@
           </dl>
         </section>
         <section class="panel">
-          <h3>Workbook Tools</h3>
+          <h3>Backup & Import Tools</h3>
           <div class="backup-actions">
+            <button id="dataImportBackup">Import App Backup</button>
+            <button id="dataExportBackup">Export App Backup</button>
             <button id="dataImportExcel">Import Workbook</button>
             <button id="dataExportExcel">Export Excel Backup</button>
             <button id="loadDemoData" type="button">Load Demo Data</button>
             <button id="clearAllData" type="button" class="danger-button">Clear All Data</button>
           </div>
-          <p class="muted">Importing replaces current app records. Exporting creates a workbook backup.</p>
+          <p class="muted">App backup restores records plus saved salary/bill files. Workbook import/export is for Excel-compatible data.</p>
           <p class="muted clear-warning">Before clearing all data, export a backup and keep it somewhere safe.</p>
         </section>
         <section class="panel salary-sheets-panel">

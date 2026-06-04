@@ -75,6 +75,7 @@ body {
   border-color: var(--blue);
 }
 
+.setup-actions button:nth-child(2),
 .setup-actions button:last-child {
   background: var(--teal);
   color: #fff;
@@ -148,8 +149,10 @@ nav button.active {
   gap: 8px;
 }
 
-#importExcel { background: var(--blue); color: #fff; border-color: var(--blue); }
-#exportExcel { background: var(--teal); color: #fff; border-color: var(--teal); }
+#importBackup { background: var(--blue); color: #fff; border-color: var(--blue); }
+#exportBackup { background: var(--teal); color: #fff; border-color: var(--teal); }
+#importExcel,
+#exportExcel { background: #fff; color: var(--ink); border-color: var(--line); }
 
 .app { min-width: 0; }
 
@@ -446,7 +449,7 @@ canvas {
   flex-wrap: wrap;
 }
 
-.backup-actions button:first-child {
+.backup-actions #dataImportBackup {
   background: var(--blue);
   color: #fff;
   border-color: var(--blue);
@@ -458,7 +461,7 @@ canvas {
   border-color: #efb8b8;
 }
 
-#dataExportExcel,
+#dataExportBackup,
 #loadDemoData {
   background: var(--teal);
   color: #fff;

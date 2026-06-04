@@ -336,6 +336,31 @@ function importExcel(filePath) {
   return data;
 }
 
+function importBackup(filePath) {
+  const imported = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  const archives = imported?._archives || {};
+  const data = Object.assign(emptyData(), imported || {});
+  delete data._archives;
+  data.meta = Object.assign({}, emptyData().meta, imported?.meta || {}, {
+    sourceFile: filePath,
+    importedAt: new Date().toISOString(),
+    dataPath
+  });
+  data.salary = Array.isArray(data.salary) ? data.salary : [];
+  data.monthlyDetails = Array.isArray(data.monthlyDetails) ? data.monthlyDetails : [];
+  data.overtime = Array.isArray(data.overtime) ? data.overtime : [];
+  data.stockRevenue = Array.isArray(data.stockRevenue) ? data.stockRevenue : [];
+  data.daily = Array.isArray(data.daily) ? data.daily : [];
+  data.personalBalances = Array.isArray(data.personalBalances) ? data.personalBalances : [];
+  data.salarySheets = Array.isArray(data.salarySheets) ? data.salarySheets : [];
+  data.unpaidBills = Array.isArray(data.unpaidBills) ? data.unpaidBills : [];
+  if (!data.meta.startedAt) data.meta.startedAt = data.meta.importedAt;
+  restoreArchiveFiles(salarySheetsDir, archives.salarySheets);
+  restoreArchiveFiles(unpaidBillsDir, archives.unpaidBills);
+  saveData(data);
+  return data;
+}
+
 function loadData() {
   if (!publishPreview && !fs.existsSync(dataPath) && fs.existsSync(legacyDataPath)) {
     fs.mkdirSync(dataDir, { recursive: true });
@@ -387,6 +412,44 @@ function exportExcel(data, outputPath) {
   addSheet('Salary Sheets Archive', data.salarySheets || []);
   addSheet('Unpaid Bills Archive', data.unpaidBills || []);
   XLSX.writeFile(wb, outputPath);
+  return outputPath;
+}
+
+function collectArchiveFiles(baseDir, records) {
+  return (records || [])
+    .map((record) => {
+      const filePath = safeStoredFilePath(baseDir, record.storedName);
+      if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return null;
+      return {
+        storedName: record.storedName,
+        contentBase64: fs.readFileSync(filePath).toString('base64')
+      };
+    })
+    .filter(Boolean);
+}
+
+function restoreArchiveFiles(baseDir, archiveFiles) {
+  if (!Array.isArray(archiveFiles)) return;
+  fs.rmSync(baseDir, { recursive: true, force: true });
+  fs.mkdirSync(baseDir, { recursive: true });
+  archiveFiles.forEach((file) => {
+    const filePath = safeStoredFilePath(baseDir, file?.storedName);
+    if (!filePath || typeof file.contentBase64 !== 'string') return;
+    fs.writeFileSync(filePath, Buffer.from(file.contentBase64, 'base64'));
+  });
+}
+
+function exportBackup(data, outputPath) {
+  const backup = Object.assign(emptyData(), data || {});
+  backup.meta = Object.assign({}, emptyData().meta, data?.meta || {}, {
+    updatedAt: new Date().toISOString(),
+    dataPath: ''
+  });
+  backup._archives = {
+    salarySheets: collectArchiveFiles(salarySheetsDir, backup.salarySheets),
+    unpaidBills: collectArchiveFiles(unpaidBillsDir, backup.unpaidBills)
+  };
+  fs.writeFileSync(outputPath, JSON.stringify(backup, null, 2));
   return outputPath;
 }
 
@@ -453,6 +516,26 @@ ipcMain.handle('data:exportExcel', async (_event, data) => {
   if (result.canceled || !result.filePath) return null;
   saveData(data);
   return exportExcel(data, result.filePath);
+});
+ipcMain.handle('data:importBackup', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Import finance records backup',
+    defaultPath: app.getPath('documents'),
+    filters: [{ name: 'Finance Records Backup', extensions: ['json'] }],
+    properties: ['openFile']
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  return importBackup(result.filePaths[0]);
+});
+ipcMain.handle('data:exportBackup', async (_event, data) => {
+  const result = await dialog.showSaveDialog({
+    title: 'Export finance records backup',
+    defaultPath: path.join(projectDir, `FinanceRecords-Backup-${new Date().toISOString().slice(0, 10)}.json`),
+    filters: [{ name: 'Finance Records Backup', extensions: ['json'] }]
+  });
+  if (result.canceled || !result.filePath) return null;
+  saveData(data);
+  return exportBackup(data, result.filePath);
 });
 ipcMain.handle('salarySheets:addFromPaths', (_event, filePaths) => archiveSalarySheets(filePaths));
 ipcMain.handle('salarySheets:chooseAndAdd', async () => {

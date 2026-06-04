@@ -1006,6 +1006,21 @@ async function importExcelWithConfirmation() {
   }
 }
 
+async function importBackupWithConfirmation() {
+  if (hasRecords() && !confirm('Importing a backup will replace the current app records. Continue?')) return;
+  const imported = await window.financeApi.importBackup();
+  if (imported) {
+    state = imported;
+    render();
+    setSaveState('Backup imported');
+  }
+}
+
+async function exportBackupData() {
+  const output = await window.financeApi.exportBackup(state);
+  if (output) setSaveState(`Backup exported: ${output}`);
+}
+
 function addQuickOtEntry(event) {
   event.preventDefault();
   const hours = Number(document.getElementById('otHours').value || 0);
@@ -1373,14 +1388,19 @@ function bindEvents() {
   document.getElementById('editOtSalaryDetail').addEventListener('click', editCurrentOtSalaryDetail);
   document.getElementById('saveNow').addEventListener('click', save);
   document.getElementById('globalSearch').addEventListener('input', render);
+  document.getElementById('importBackup').addEventListener('click', importBackupWithConfirmation);
   document.getElementById('importExcel').addEventListener('click', importExcelWithConfirmation);
+  document.getElementById('setupImportBackup').addEventListener('click', importBackupWithConfirmation);
   document.getElementById('setupImportExcel').addEventListener('click', importExcelWithConfirmation);
+  document.getElementById('dataImportBackup').addEventListener('click', importBackupWithConfirmation);
   document.getElementById('dataImportExcel').addEventListener('click', importExcelWithConfirmation);
   document.getElementById('startBlank').addEventListener('click', async () => {
     state = await window.financeApi.startBlank();
     render();
     setSaveState('Started');
   });
+  document.getElementById('exportBackup').addEventListener('click', exportBackupData);
+  document.getElementById('dataExportBackup').addEventListener('click', exportBackupData);
   document.getElementById('exportExcel').addEventListener('click', async () => {
     const output = await window.financeApi.exportExcel(state);
     if (output) setSaveState(`Exported: ${output}`);

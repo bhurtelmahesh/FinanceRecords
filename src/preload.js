@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('financeApi', {
   clearAll: () => ipcRenderer.invoke('data:clearAll'),
   importExcel: () => ipcRenderer.invoke('data:importExcel'),
   exportExcel: (data) => ipcRenderer.invoke('data:exportExcel', data),
+  importBackup: () => ipcRenderer.invoke('data:importBackup'),
+  exportBackup: (data) => ipcRenderer.invoke('data:exportBackup', data),
   addSalarySheetsFromPaths: (paths) => ipcRenderer.invoke('salarySheets:addFromPaths', paths),
   chooseSalarySheets: () => ipcRenderer.invoke('salarySheets:chooseAndAdd'),
   openSalarySheet: (storedName) => ipcRenderer.invoke('salarySheets:open', storedName),
