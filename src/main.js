@@ -135,9 +135,46 @@ function importExcel(filePath) {
   return { fileName: path.basename(filePath), sheets };
 }
 
+const BACKUP_VERSION = 1;
+
+// Older web backups carried the bytes on each record instead of in _archives, and
+// a file that has passed through both apps carries some of each. Merge the two
+// rather than preferring one, or the mixed case loses whichever side is smaller.
+function archivesFromBackup(imported, collection) {
+  const byName = new Map();
+  (imported?.[collection] || []).forEach((item) => {
+    if (typeof item?.dataUrl !== 'string' || !item.dataUrl.includes(',')) return;
+    byName.set(item.storedName, {
+      storedName: item.storedName,
+      contentBase64: item.dataUrl.slice(item.dataUrl.indexOf(',') + 1)
+    });
+  });
+  const listed = imported?._archives?.[collection];
+  if (Array.isArray(listed)) {
+    listed.forEach((entry) => {
+      if (entry?.storedName && typeof entry.contentBase64 === 'string') byName.set(entry.storedName, entry);
+    });
+  }
+  return [...byName.values()];
+}
+
+function stripInlineArchives(data) {
+  ['salarySheets', 'unpaidBills'].forEach((collection) => {
+    data[collection] = (data[collection] || []).map(({ dataUrl, ...rest }) => rest);
+  });
+  return data;
+}
+
 function importBackup(filePath) {
   const imported = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  const archives = imported?._archives || {};
+  const version = Number(imported?.meta?.version || 0);
+  if (version > BACKUP_VERSION) {
+    throw new Error(`That backup was written by a newer version of the app (format ${version}). Update before importing it.`);
+  }
+  const archives = {
+    salarySheets: archivesFromBackup(imported, 'salarySheets'),
+    unpaidBills: archivesFromBackup(imported, 'unpaidBills')
+  };
   const data = Object.assign(emptyData(), imported || {});
   delete data._archives;
   data.meta = Object.assign({}, emptyData().meta, imported?.meta || {}, {
@@ -156,6 +193,7 @@ function importBackup(filePath) {
   if (!data.meta.startedAt) data.meta.startedAt = data.meta.importedAt;
   restoreArchiveFiles(salarySheetsDir, archives.salarySheets);
   restoreArchiveFiles(unpaidBillsDir, archives.unpaidBills);
+  stripInlineArchives(data);
   saveData(data);
   return data;
 }
@@ -240,10 +278,12 @@ function exportBackup(data, outputPath) {
     updatedAt: new Date().toISOString(),
     dataPath: ''
   });
+  backup.meta.version = BACKUP_VERSION;
   backup._archives = {
     salarySheets: collectArchiveFiles(salarySheetsDir, backup.salarySheets),
     unpaidBills: collectArchiveFiles(unpaidBillsDir, backup.unpaidBills)
   };
+  stripInlineArchives(backup);
   fs.writeFileSync(outputPath, JSON.stringify(backup, null, 2));
   return outputPath;
 }
