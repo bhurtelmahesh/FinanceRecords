@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' file: data:; frame-src file:; object-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' file: data:; frame-src file: data:; object-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Finance Records</title>
   <link rel="stylesheet" href="./styles.css">
@@ -11,14 +11,15 @@
   <div id="setupOverlay" class="setup-overlay" hidden>
     <section class="setup-card">
       <div class="brand-mark">¥</div>
-      <h1>Finance Records</h1>
+      <h1>Finance Tracker</h1>
         <p>Track income, savings, stock wins, overtime, daily records, and debts without living in spreadsheets.</p>
       <div class="setup-actions">
         <button id="startBlank">Start Blank</button>
-        <button id="setupImportBackup">Import Backup</button>
+        <button id="setupLoadDemoData" type="button">Load Demo Data</button>
         <button id="setupImportExcel">Import Workbook</button>
+        <button id="setupImportBackup">Import App Backup</button>
       </div>
-      <small>Start blank, restore an app backup, or bring in an Excel workbook.</small>
+      <small>Start fresh, load demo data, or restore a JSON backup.</small>
     </section>
   </div>
 
@@ -27,18 +28,31 @@
       <div class="brand-mark">¥</div>
       <div>
         <h1>Finance Records</h1>
-        <p>Finance tracker</p>
+        <p>Records</p>
       </div>
     </div>
-    <nav id="nav">
-      <button data-view="dashboard" class="active">Dashboard</button>
-      <button data-view="salary">Monthly Savings</button>
-      <button data-view="details">Salary Details</button>
-      <button data-view="overtime">Overtime</button>
-      <button data-view="stocks">Stock Revenue</button>
-      <button data-view="daily">Daily Records</button>
-      <button data-view="balances">Debt Records</button>
-      <button data-view="data">Backup & Import</button>
+    <nav id="nav" aria-label="Primary sections">
+      <button data-view="dashboard" class="active" aria-current="page">Dashboard</button>
+
+      <p class="nav-group" id="navGroupSalary">Salary</p>
+      <div class="nav-items" role="group" aria-labelledby="navGroupSalary">
+        <button data-view="salary">Monthly Savings</button>
+        <button data-view="details">Salary Details</button>
+        <button data-view="overtime">Overtime</button>
+      </div>
+
+      <p class="nav-group" id="navGroupStocks">Stocks</p>
+      <div class="nav-items" role="group" aria-labelledby="navGroupStocks">
+        <button data-view="stocks">Stock Revenue</button>
+        <button data-view="daily">Daily Records</button>
+      </div>
+
+      <p class="nav-group" id="navGroupOther">Other</p>
+      <div class="nav-items" role="group" aria-labelledby="navGroupOther">
+        <button data-view="balances">Debt Records</button>
+        <button data-view="data">Backup & Import</button>
+        <button data-view="help">Help</button>
+      </div>
     </nav>
     <div class="sidebar-actions">
       <button id="importBackup">Import Backup</button>
@@ -55,40 +69,36 @@
         <h2 id="viewTitle">Dashboard</h2>
       </div>
       <div class="top-actions">
-        <input id="globalSearch" type="search" placeholder="Search records">
-        <span id="saveState">Loading...</span>
+        <input id="globalSearch" type="search" placeholder="Search records" aria-label="Search records">
+        <span id="saveState" role="status" aria-live="polite">Loading...</span>
         <button id="saveNow">Save</button>
       </div>
     </header>
 
     <section id="dashboard" class="view active">
       <div class="kpi-grid" id="kpis"></div>
-      <div class="dashboard-grid">
-        <section class="panel">
-          <div class="panel-head">
-            <h3>Net Income vs Savings</h3>
-            <select id="dashboardYear"></select>
+      <section class="panel chart-stack">
+        <div class="chart-tabs">
+          <div class="chart-tablist" role="tablist" aria-label="Chart">
+            <button type="button" role="tab" id="chartTabSalary" data-chart="salary"
+              aria-selected="true" aria-controls="chartPanelSalary">Salary</button>
+            <button type="button" role="tab" id="chartTabStock" data-chart="stock"
+              aria-selected="false" aria-controls="chartPanelStock" tabindex="-1">Stock</button>
           </div>
-          <canvas id="salaryChart" width="760" height="380"></canvas>
-        </section>
-        <section class="panel">
-          <div class="panel-head">
-            <h3>Stock Win Target</h3>
-          </div>
-          <canvas id="stockChart" width="520" height="380"></canvas>
-        </section>
-      </div>
-      <section class="panel insights-panel">
-        <div class="panel-head">
-          <h3>Monthly Snapshot</h3>
+          <select id="dashboardYear" aria-label="Dashboard year"></select>
         </div>
-        <div id="insights" class="insights"></div>
+        <div class="chart-panel" id="chartPanelSalary" role="tabpanel" aria-labelledby="chartTabSalary">
+          <canvas id="salaryChart" width="760" height="380" role="img" aria-label="Gross income and take-home chart">Gross income and take-home chart</canvas>
+        </div>
+        <div class="chart-panel" id="chartPanelStock" role="tabpanel" aria-labelledby="chartTabStock" hidden>
+          <canvas id="stockChart" width="760" height="380" role="img" aria-label="Stock win target chart">Stock win target chart</canvas>
+        </div>
       </section>
     </section>
 
     <section id="salary" class="view">
       <div class="toolbar">
-        <select id="salaryYearFilter"></select>
+        <select id="salaryYearFilter" aria-label="Monthly savings year"></select>
         <button data-add="salary">Add Manual Income</button>
       </div>
       <div id="salaryTable"></div>
@@ -96,7 +106,7 @@
 
     <section id="details" class="view">
       <div class="toolbar">
-        <select id="detailsYearFilter"></select>
+        <select id="detailsYearFilter" aria-label="Salary details year"></select>
         <button data-add="monthlyDetails">Add Salary Detail</button>
       </div>
       <div id="detailsTable"></div>
@@ -115,7 +125,7 @@
             </label>
             <label>
               <span>Month</span>
-              <select id="otMonth" required></select>
+              <select id="otMonth" required aria-label="Overtime entry month"></select>
             </label>
             <label>
               <span>Day</span>
@@ -144,8 +154,8 @@
           <div class="panel-head">
             <h3 id="otSummaryTitle">Monthly OT Summary</h3>
             <div class="ot-filter">
-              <select id="otYearFilter"></select>
-              <select id="otMonthFilter"></select>
+              <select id="otYearFilter" aria-label="Overtime summary year"></select>
+              <select id="otMonthFilter" aria-label="Overtime summary month"></select>
               <button id="editOtSalaryDetail" type="button">Edit Salary Detail</button>
             </div>
           </div>
@@ -157,15 +167,15 @@
 
     <section id="stocks" class="view">
       <div class="toolbar">
-        <select id="stockYearFilter"></select>
+        <select id="stockYearFilter" aria-label="Stock revenue year"></select>
       </div>
       <div id="stockTable"></div>
     </section>
 
     <section id="daily" class="view">
       <div class="toolbar">
-        <select id="dailyYearFilter"></select>
-        <select id="dailyMonthFilter"></select>
+        <select id="dailyYearFilter" aria-label="Daily records year"></select>
+        <select id="dailyMonthFilter" aria-label="Daily records month"></select>
       </div>
       <div id="dailyTable"></div>
     </section>
@@ -177,19 +187,12 @@
       <div id="balanceTable"></div>
       <section class="panel unpaid-bills-panel">
         <div class="panel-head">
-          <h3>Unpaid Bills Archive</h3>
+          <h3>Unpaid Bills Archive <b id="unpaidBillCount" class="archive-count">0 files</b></h3>
           <button id="chooseUnpaidBills" type="button">Add Bill Files</button>
         </div>
         <div id="unpaidBillDropZone" class="salary-sheet-drop">
           <strong>Drop unpaid bills here</strong>
-          <span>Photos, PDFs, and document files are copied into this app and named from the file name.</span>
-        </div>
-        <div class="archive-list-head">
-          <div>
-            <strong>Saved bill files</strong>
-            <span>Use Preview for images/PDFs, or Open for any saved file.</span>
-          </div>
-          <b id="unpaidBillCount">0 files</b>
+          <span>Photos, PDFs, and document files are copied into the app after you enter a title.</span>
         </div>
         <div id="unpaidBillList" class="salary-sheet-list"></div>
       </section>
@@ -199,7 +202,7 @@
       <div class="data-grid">
         <section class="panel">
           <h3>Saved Records</h3>
-          <p class="muted">Workbook import/export is optional.</p>
+          <p class="muted">Records are stored in finance-data.json on this Mac. Export a backup before clearing them.</p>
           <dl class="meta-list">
             <dt>Database</dt><dd id="dataPathText">-</dd>
             <dt>Started</dt><dd id="startedAtText">-</dd>
@@ -208,45 +211,146 @@
           </dl>
         </section>
         <section class="panel">
-          <h3>Backup & Import Tools</h3>
+          <h3>Backup Tools</h3>
           <div class="backup-actions">
+            <button id="dataImportExcel">Import Workbook</button>
+            <button id="dataExportExcel">Export Excel</button>
             <button id="dataImportBackup">Import App Backup</button>
             <button id="dataExportBackup">Export App Backup</button>
-            <button id="dataImportExcel">Import Workbook</button>
-            <button id="dataExportExcel">Export Excel Backup</button>
             <button id="loadDemoData" type="button">Load Demo Data</button>
             <button id="clearAllData" type="button" class="danger-button">Clear All Data</button>
           </div>
-          <p class="muted">App backup restores records plus saved salary/bill files. Workbook import/export is for Excel-compatible data.</p>
+          <p class="muted">Importing replaces the current app records. Exporting writes a file you choose.</p>
           <p class="muted clear-warning">Before clearing all data, export a backup and keep it somewhere safe.</p>
         </section>
         <section class="panel salary-sheets-panel">
           <div class="panel-head">
-            <h3>Salary Sheet Archive</h3>
+            <h3>Salary Sheet Archive <b id="salarySheetCount" class="archive-count">0 files</b></h3>
             <button id="chooseSalarySheets" type="button">Add Files</button>
           </div>
           <div id="salarySheetDropZone" class="salary-sheet-drop">
             <strong>Drop salary sheets here</strong>
-            <span>Excel, Numbers, PDF, CSV, or text files are copied into this app for later viewing.</span>
-          </div>
-          <div class="archive-list-head">
-            <div>
-              <strong>Saved salary files</strong>
-              <span>Use Preview for images/PDFs, or Open for any saved file.</span>
-            </div>
-            <b id="salarySheetCount">0 files</b>
+            <span>Excel, Numbers, PDF, CSV, text, or images are copied into the app for later viewing.</span>
           </div>
           <div id="salarySheetList" class="salary-sheet-list"></div>
         </section>
       </div>
     </section>
+    <section id="help" class="view">
+      <div class="help-doc">
+        <section class="panel help-panel">
+          <h3>How every number is worked out</h3>
+          <p class="muted">Amounts are yen. Green means money gained, red means money lost or owed &mdash; the same rule everywhere in the app.</p>
+          <p><strong>Salary and stock are kept apart.</strong> Salary Details and Overtime are the salary side. Daily Records and Stock Revenue are the stock side. Stock movements are never netted off your pay, so a heavy trading month cannot make your salary savings look bad.</p>
+        </section>
+
+        <section class="panel help-panel">
+          <h3>Salary Details</h3>
+          <dl class="help-list">
+            <dt>Overtime Pay</dt>
+            <dd>The total of your Overtime entries for that month. Logged overtime wins: the figure typed here is used only for months with no overtime entries.</dd>
+            <dt>Gross Total</dt>
+            <dd>Basic + Allowance + Overtime Pay + Transportation.</dd>
+            <dt>Total Deduction</dt>
+            <dd>Health Insurance + Pension + Employment Insurance + Residence Tax + Income Tax.</dd>
+            <dt>Net Received</dt>
+            <dd>Gross Total &minus; Total Deduction.</dd>
+            <dt>Income Tax</dt>
+            <dd>Your own figure is kept whenever you enter one. Leave it blank and the app estimates it.</dd>
+          </dl>
+          <p class="help-note">Gross Total, Total Deduction and Net Received are always recalculated on save, so they are shown read-only.</p>
+        </section>
+
+        <section class="panel help-panel">
+          <h3>Income tax estimate</h3>
+          <p>Used only when Income Tax is left blank. It annualises Basic + Allowance + Overtime (Transportation is excluded, as commuting allowance is not taxable), subtracts the employment-income deduction, then social insurance and the basic deduction, applies the income tax brackets with the 2.1% surtax, and divides by twelve.</p>
+          <p class="help-warn">Treat this as a rough guide. It ignores bonuses, and Japan withholds monthly tax from a published table rather than by annualising, so it will not match a payslip exactly. It also mixes tax years: the employment-income deduction floor is the post-2025 figure while the basic deduction is the pre-2025 one. Enter the figure from your payslip whenever you have it.</p>
+        </section>
+
+        <section class="panel help-panel">
+          <h3>Daily Records</h3>
+          <dl class="help-list">
+            <dt>What a number means</dt>
+            <dd>This is the day-by-day stock log: a gain is positive, a loss negative. It rolls up into the Stock section and is never subtracted from your salary.</dd>
+            <dt>A status instead of a number</dt>
+            <dd>Type a word instead of an amount &mdash; CLOSED for a holiday, for example &mdash; and the day is stored with a zero amount and that marker.</dd>
+            <dt>Zero versus empty</dt>
+            <dd>A cell showing 0 is a day recorded as zero. An empty cell has no record at all. Clearing a cell deletes its record.</dd>
+            <dt>Saturday and Sunday</dt>
+            <dd>Shown as a red chip until you enter something. Weekends are fully editable.</dd>
+            <dt>Monthly Total</dt>
+            <dd>The sum of that month&rsquo;s amounts. A dash means the month has no records at all.</dd>
+          </dl>
+        </section>
+
+        <section class="panel help-panel">
+          <h3>Monthly Savings</h3>
+          <dl class="help-list">
+            <dt>Gross Income</dt>
+            <dd>The month&rsquo;s Gross Total &mdash; the same Total shown on the Overtime page.</dd>
+            <dt>Actual Savings</dt>
+            <dd>What actually reached you: Gross Income &minus; Total Deduction. Stock activity is never netted off it.</dd>
+            <dt>Savings Goal</dt>
+            <dd>Whatever you set. It is never calculated.</dd>
+            <dt>What counts as a month so far</dt>
+            <dd>Simply whether the month has happened yet, by the calendar. Bonus rows always count.</dd>
+            <dt>Cumulative Capital</dt>
+            <dd>Carried forward from existing records. The app does not calculate it, so a new month starts at zero.</dd>
+          </dl>
+          <p class="help-note">Rows generated from Salary Details cannot be deleted here &mdash; delete the matching salary detail instead. Months that have not happened yet are shaded and tagged <em>projected</em>: the figures are the ones you entered ahead of time, and the dashboard keeps them out of its headline totals.</p>
+        </section>
+
+        <section class="panel help-panel">
+          <h3>Dashboard</h3>
+          <p class="muted">Each figure is a button: click it to open the section it comes from.</p>
+          <dl class="help-list">
+            <dt>Salary &middot; Gross Income</dt>
+            <dd>Gross pay for the months that have already happened, plus any bonus rows. The caption gives the projected full-year figure &mdash; the same total with your future months included &mdash; and how many months have gone by.</dd>
+            <dt>Salary &middot; Take-home Saved</dt>
+            <dd>The same split for what reached you after deductions, with the projected full year in the caption.</dd>
+            <dt>Stock &middot; Win Total</dt>
+            <dd>The latest Actual Win Cumulative recorded that year. The caption gives that same month&rsquo;s Target Cumulative, so you can see the figure against the goal it was measured on.</dd>
+            <dt>Outstanding Debt</dt>
+            <dd>Every Debt Amount added together, exactly as entered. The caption counts the records and the distinct lenders behind that total.</dd>
+          </dl>
+        </section>
+
+        <section class="panel help-panel">
+          <h3>Stock Revenue</h3>
+          <dl class="help-list">
+            <dt>Monthly Win</dt>
+            <dd>This month&rsquo;s Actual Win Cumulative &minus; the previous recorded month&rsquo;s. The first month with a figure shows zero, as there is nothing to compare against.</dd>
+            <dt>Vs Target</dt>
+            <dd>Actual Win Cumulative &minus; Target Cumulative.</dd>
+            <dt>Result</dt>
+            <dd>A tick above target, a cross below, a dash when the month has no actual figure.</dd>
+          </dl>
+        </section>
+
+        <section class="panel help-panel">
+          <h3>Overtime</h3>
+          <dl class="help-list">
+            <dt>Amount</dt>
+            <dd>(OT Hours + Extra OT) &times; Hourly Rate.</dd>
+            <dt>Monthly OT Summary</dt>
+            <dd>Adds that month&rsquo;s entries and shows them against the matching salary detail, so a payslip can be checked before entering it.</dd>
+          </dl>
+        </section>
+
+        <section class="panel help-panel">
+          <h3>Your data</h3>
+          <p>Everything is stored in finance-data.json on this Mac. Nothing is uploaded. Export a backup regularly &mdash; and before clearing anything.</p>
+        </section>
+      </div>
+    </section>
+
   </main>
 
   <dialog id="recordDialog">
     <form method="dialog" id="recordForm">
       <header>
         <h3 id="dialogTitle">Edit record</h3>
-        <button value="cancel" class="icon-button" aria-label="Close">×</button>
+        <button type="button" id="closeDialog" class="icon-button" aria-label="Close">×</button>
       </header>
       <div id="dialogFields" class="dialog-fields"></div>
       <footer>
@@ -264,6 +368,12 @@
     <div id="previewBody" class="preview-body"></div>
   </dialog>
 
-  <script src="./renderer.js"></script>
+  <noscript>
+    <p style="padding:24px;font:16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+      Finance Records needs JavaScript enabled.
+    </p>
+  </noscript>
+
+  <script type="module" src="./renderer.js"></script>
 </body>
 </html>
