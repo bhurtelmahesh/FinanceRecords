@@ -48,6 +48,80 @@ const titles = {
 };
 
 const collections = ['salary', 'monthlyDetails', 'overtime', 'stockRevenue', 'daily', 'personalBalances'];
+
+// The workbook mirrors the app: one sheet per menu, columns headed the way the
+// tables head them, so a row in Excel reads like the row on screen.
+const archiveFields = [
+  ['originalName', 'File'], ['title', 'Title'], ['savedAt', 'Saved'],
+  ['size', 'Size (bytes)'], ['type', 'Type'], ['storedName', 'Stored As']
+];
+
+const workbookSheets = [
+  ['Monthly Savings', 'salary', () => schemas.salary],
+  ['Salary Details', 'monthlyDetails', () => schemas.monthlyDetails],
+  ['Overtime', 'overtime', () => schemas.overtime],
+  ['Stock Revenue', 'stockRevenue', () => schemas.stockRevenue],
+  ['Daily Records', 'daily', () => schemas.daily],
+  ['Debt Records', 'personalBalances', () => schemas.personalBalances],
+  ['Salary Sheet Archive', 'salarySheets', () => archiveFields],
+  ['Unpaid Bills Archive', 'unpaidBills', () => archiveFields]
+];
+
+function buildWorkbookSheets(data) {
+  const years = yearsFrom(data.salary);
+  const summary = years.map((year) => {
+    const rows = (data.salary || []).filter((item) => Number(item.year) === year);
+    const elapsed = rows.filter((item) => monthHasElapsed(item, year));
+    const stock = (data.stockRevenue || [])
+      .filter((item) => Number(item.year) === year && Number(item.actualCumulative || 0) !== 0)
+      .sort((a, b) => monthIndex(a.month) - monthIndex(b.month)).at(-1);
+    return {
+      'Year': year,
+      'Gross Income (so far)': sum(elapsed, 'salary'),
+      'Gross Income (full year)': sum(rows, 'salary'),
+      'Take-home Saved (so far)': sum(elapsed, 'actualSavings'),
+      'Savings Goal (so far)': sum(elapsed, 'plannedSavings'),
+      'Stock Win Total': Number(stock?.actualCumulative || 0),
+      'Daily Stock Entries': (data.daily || []).filter((item) => Number(item.year) === year && Number(item.amount) !== 0).length
+    };
+  });
+  const sheets = [{
+    name: 'Summary',
+    rows: summary,
+    widths: [{ wch: 8 }, { wch: 20 }, { wch: 22 }, { wch: 22 }, { wch: 20 }, { wch: 16 }, { wch: 18 }]
+  }];
+  workbookSheets.forEach(([name, collection, fieldsFor]) => {
+    const fields = fieldsFor();
+    sheets.push({
+      name,
+      rows: (data[collection] || []).map((record) =>
+        Object.fromEntries(fields.map(([key, label]) => [label, record[key] ?? '']))),
+      widths: fields.map(([, label]) => ({ wch: Math.max(12, label.length + 3) }))
+    });
+  });
+  return sheets;
+}
+
+// Turn the sheets the main process read back into records.
+function recordsFromWorkbook(sheets, fileName) {
+  const imported = {
+    meta: { version: 1, sourceFile: fileName || '', importedAt: new Date().toISOString() }
+  };
+  workbookSheets.forEach(([name, collection, fieldsFor]) => {
+    const rows = (sheets || {})[name] || [];
+    const fields = fieldsFor();
+    imported[collection] = rows.map((row) => {
+      const record = {};
+      fields.forEach(([key, label, type]) => {
+        const value = row[label];
+        if (value === undefined || value === '') return;
+        record[key] = type === 'number' ? Number(value) : value;
+      });
+      return record;
+    });
+  });
+  return imported;
+}
 const computedFields = {
   monthlyDetails: ['grossTotal', 'totalDeduction', 'received'],
   overtime: ['amount'],
@@ -1240,20 +1314,23 @@ function deleteRecord(collection, recordId) {
 }
 
 async function importExcelWithConfirmation() {
-  if (hasRecords() && !confirm('Importing will replace the current app records. Continue?')) return;
+  if (hasRecords() && !confirm('Importing a workbook will replace the current app records. Continue?')) return;
   try {
-    const imported = await window.financeApi.importExcel();
-    if (!imported) return;
-    if (!looksLikeBackup(imported)) {
-      throw new Error('That file is not a Finance Records workbook or backup, so nothing was imported.');
+    const result = await window.financeApi.importExcel();
+    if (!result) return;
+    const imported = recordsFromWorkbook(result.sheets, result.fileName);
+    if (!collections.some((key) => (imported[key] || []).length)) {
+      throw new Error(`"${result.fileName}" has no Finance Records sheets in it, so nothing was imported.`);
     }
     state = normalizeLoadedData(imported);
+    state.meta.startedAt = state.meta.startedAt || state.meta.importedAt;
     render();
-    setSaveState('Imported');
+    await save();
+    setSaveState('Workbook imported');
   } catch (error) {
     console.error(error);
     setSaveState('Import failed');
-    alert(error?.message || 'Import failed. Please choose a valid Finance Records file.');
+    alert(error?.message || 'That workbook could not be read.');
   }
 }
 
@@ -1273,7 +1350,10 @@ async function importBackupWithConfirmation() {
 }
 
 async function exportRecords() {
-  const output = await window.financeApi.exportExcel(state);
+  const output = await window.financeApi.exportExcel({
+    data: state,
+    sheets: buildWorkbookSheets(normalizeLoadedData(state))
+  });
   if (output) setSaveState(`Exported: ${output}`);
 }
 

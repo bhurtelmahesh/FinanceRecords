@@ -34,14 +34,6 @@ function num(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function cell(sheet, address) {
-  return sheet[address] ? sheet[address].v : null;
-}
-
-function sheetRows(sheet) {
-  return XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
-}
-
 function safeId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -134,206 +126,13 @@ function unpaidBillPath(storedName) {
   return safeStoredFilePath(unpaidBillsDir, storedName);
 }
 
-function parseYearSummary(workbook, year) {
-  const sheet = workbook.Sheets[String(year)];
-  if (!sheet) return [];
-  const rows = sheetRows(sheet);
-  const plannedByMonth = {};
-  for (let r = 1; r < rows.length; r += 1) {
-    const row = rows[r] || [];
-    const month = monthName(row[3]);
-    if (month && month !== 'Total') {
-      plannedByMonth[month] = num(row[4]);
-    }
-  }
-  const result = [];
-  for (let r = 1; r < rows.length; r += 1) {
-    const row = rows[r] || [];
-    const month = monthName(row[9]);
-    if (!month || month === 'Total') continue;
-    const salary = num(row[10]);
-    const actualSavings = num(row[11]);
-    result.push({
-      id: safeId('salary'),
-      year: Number(year),
-      month,
-      salary,
-      plannedSavings: plannedByMonth[month] || 0,
-      actualSavings,
-      savingsRate: salary ? actualSavings / salary : 0,
-      cumulativeCapital: num(row[12]),
-      note: ''
-    });
-  }
-  return result;
-}
-
-function parseMonthlyDetails(workbook, sheetName, year) {
-  const sheet = workbook.Sheets[sheetName];
-  if (!sheet) return [];
-  const rows = sheetRows(sheet);
-  const result = [];
-  for (let r = 0; r < rows.length; r += 1) {
-    const label = monthName((rows[r] || [])[0]);
-    if (!/月$/.test(label)) continue;
-    const block = rows.slice(r, Math.min(rows.length, r + 23));
-    const findValue = (name) => {
-      for (const row of block) {
-        for (let c = 0; c < row.length; c += 1) {
-          if (String(row[c] || '').toLowerCase() === name.toLowerCase()) {
-            return num(row[c + 1]);
-          }
-        }
-      }
-      return 0;
-    };
-    const basic = findValue('Basic');
-    const allowance = findValue('Allowance');
-    const overtimePay = findValue('Overtime');
-    const transportation = findValue('Transportation') || findValue('Trasportation');
-    const insurance = findValue('Insurance');
-    const pension = findValue('Nenkin');
-    const employmentInsurance = findValue('Koyo Hoken');
-    const residentTax = findValue('JUMINZEI');
-    const incomeTax = findValue('Income Tax');
-    const totalDeduction = insurance + pension + employmentInsurance + residentTax + incomeTax;
-    const grossTotal = basic + allowance + overtimePay + transportation;
-    result.push({
-      id: safeId('detail'),
-      year,
-      month: label.replace('月', ''),
-      basic,
-      allowance,
-      overtimePay,
-      transportation,
-      grossTotal,
-      insurance,
-      pension,
-      employmentInsurance,
-      residentTax,
-      incomeTax,
-      totalDeduction,
-      received: grossTotal - totalDeduction
-    });
-  }
-  return result;
-}
-
-function parseStock(workbook) {
-  const result = [];
-  Object.keys(workbook.Sheets).filter((name) => /Stock Revenue/i.test(name)).forEach((sheetName) => {
-    const yearMatch = sheetName.match(/\d{4}/);
-    const year = yearMatch ? Number(yearMatch[0]) : null;
-    const rows = sheetRows(workbook.Sheets[sheetName]);
-    for (let r = 1; r < rows.length; r += 1) {
-      const row = rows[r] || [];
-      const month = monthName(row[0]);
-      if (!month || month === 'TOTAL' || month === 'After Tax') continue;
-      result.push({
-        id: safeId('stock'),
-        year,
-        month,
-        targetCumulative: num(row[1]),
-        actualCumulative: num(row[2]),
-        monthlyRevenue: num(row[3]),
-        surplus: num(row[4]),
-        verdict: monthName(row[5])
-      });
-    }
-  });
-  return result;
-}
-
-function parseDaily(workbook) {
-  const sheet = workbook.Sheets.Daily;
-  if (!sheet) return [];
-  const rows = sheetRows(sheet);
-  const result = [];
-  for (let r = 1; r < rows.length; r += 1) {
-    const month = monthName((rows[r] || [])[0]);
-    if (!month) continue;
-    for (let c = 1; c < (rows[0] || []).length; c += 1) {
-      const day = num((rows[0] || [])[c]);
-      const value = (rows[r] || [])[c];
-      if (!day || value === null || value === '') continue;
-      result.push({
-        id: safeId('daily'),
-        year: 2026,
-        month,
-        day,
-        amount: typeof value === 'number' ? value : 0,
-        status: typeof value === 'number' ? 'Realized' : String(value),
-        note: typeof value === 'number' ? '' : String(value)
-      });
-    }
-  }
-  return result;
-}
-
-function parseOvertime(workbook) {
-  const sheet = workbook.Sheets['OT Tracker'];
-  if (!sheet) return [];
-  const rows = sheetRows(sheet);
-  const result = [];
-  for (let r = 1; r < rows.length; r += 1) {
-    const month = monthName((rows[r] || [])[0]);
-    if (!month) continue;
-    for (let c = 1; c < (rows[0] || []).length; c += 1) {
-      const day = num((rows[0] || [])[c]);
-      const value = (rows[r] || [])[c];
-      if (!day || value === null || value === '') continue;
-      result.push({
-        id: safeId('ot'),
-        month,
-        day,
-        hours: typeof value === 'number' ? value * 24 : 0,
-        note: typeof value === 'number' ? '' : String(value)
-      });
-    }
-  }
-  return result;
-}
-
-function parsePersonalBalances(workbook) {
-  const sheetName = ['Debts', 'Debt Records', 'Bills', 'Personal Balances']
-    .find((name) => workbook.Sheets[name]);
-  const sheet = sheetName ? workbook.Sheets[sheetName] : null;
-  if (!sheet) return [];
-  const rows = sheetRows(sheet);
-  const result = [];
-  for (let r = 2; r < rows.length; r += 1) {
-    const row = rows[r] || [];
-    if (!row[1] && !row[2]) continue;
-    if (String(row[1] || '').toLowerCase() === 'total') continue;
-    result.push({
-      id: safeId('balance'),
-      group: monthName(row[0]) || 'Debt',
-      dateOrLabel: row[1] instanceof Date ? row[1].toISOString().slice(0, 10) : monthName(row[1]),
-      amount: num(row[2]),
-      note: ''
-    });
-  }
-  return result;
-}
-
 function importExcel(filePath) {
   const workbook = XLSX.readFile(filePath, { cellDates: true });
-  const data = emptyData();
-  data.meta.sourceFile = filePath;
-  data.meta.importedAt = new Date().toISOString();
-  data.meta.startedAt = data.meta.importedAt;
-  data.salary = [2024, 2025, 2026].flatMap((year) => parseYearSummary(workbook, year));
-  data.monthlyDetails = [
-    ...parseMonthlyDetails(workbook, 'Details', 2024),
-    ...parseMonthlyDetails(workbook, '2025 Details', 2025),
-    ...parseMonthlyDetails(workbook, '2026 Details', 2026)
-  ];
-  data.overtime = parseOvertime(workbook);
-  data.stockRevenue = parseStock(workbook);
-  data.daily = parseDaily(workbook);
-  data.personalBalances = parsePersonalBalances(workbook);
-  saveData(data);
-  return data;
+  const sheets = {};
+  workbook.SheetNames.forEach((name) => {
+    sheets[name] = XLSX.utils.sheet_to_json(workbook.Sheets[name]);
+  });
+  return { fileName: path.basename(filePath), sheets };
 }
 
 function importBackup(filePath) {
@@ -400,17 +199,13 @@ function clearAllData() {
   return data;
 }
 
-function exportExcel(data, outputPath) {
+function exportExcel(sheets, outputPath) {
   const wb = XLSX.utils.book_new();
-  const addSheet = (name, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), name);
-  addSheet('Salary', data.salary || []);
-  addSheet('Monthly Details', data.monthlyDetails || []);
-  addSheet('Overtime', data.overtime || []);
-  addSheet('Stock Revenue', data.stockRevenue || []);
-  addSheet('Daily', data.daily || []);
-  addSheet('Debts', data.personalBalances || []);
-  addSheet('Salary Sheets Archive', data.salarySheets || []);
-  addSheet('Unpaid Bills Archive', data.unpaidBills || []);
+  (sheets || []).forEach(({ name, rows, widths }) => {
+    const sheet = XLSX.utils.json_to_sheet(rows || []);
+    if (widths) sheet['!cols'] = widths;
+    XLSX.utils.book_append_sheet(wb, sheet, name);
+  });
   XLSX.writeFile(wb, outputPath);
   return outputPath;
 }
@@ -507,15 +302,16 @@ ipcMain.handle('data:importExcel', async () => {
   if (result.canceled || !result.filePaths[0]) return null;
   return importExcel(result.filePaths[0]);
 });
-ipcMain.handle('data:exportExcel', async (_event, data) => {
+ipcMain.handle('data:exportExcel', async (_event, payload) => {
+  const { data, sheets } = payload || {};
   const result = await dialog.showSaveDialog({
     title: 'Export finance records',
     defaultPath: path.join(projectDir, `FinanceRecords-${new Date().toISOString().slice(0, 10)}.xlsx`),
     filters: [{ name: 'Excel', extensions: ['xlsx'] }]
   });
   if (result.canceled || !result.filePath) return null;
-  saveData(data);
-  return exportExcel(data, result.filePath);
+  if (data) saveData(data);
+  return exportExcel(sheets, result.filePath);
 });
 ipcMain.handle('data:importBackup', async () => {
   const result = await dialog.showOpenDialog({
