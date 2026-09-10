@@ -236,7 +236,8 @@ nav button.active {
 }
 
 #saveState { color: var(--muted); font-size: 13px; }
-#saveNow { background: #2f80ed; color: #fff; border-color: #2f80ed; }
+/* White on the old blue was 3.87:1; this clears AA at 4.89:1. */
+#saveNow { background: #3a6fc9; color: #fff; border-color: #3a6fc9; }
 
 .view {
   display: none;
