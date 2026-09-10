@@ -3,7 +3,7 @@
   --muted: #5b6d76;
   --line: #d7e4ea;
   --blue: #256f8f;
-  --teal: #3fa88c;
+  --teal: #2a7a67;
   --green: #2e7d32;
   --red: #c33f3f;
   --yellow: #fff2c6;
@@ -157,6 +157,41 @@ nav { display: grid; gap: 4px; cursor: pointer; }
 }
 
 .nav-items { display: grid; gap: 4px; }
+
+/* Desktop-only: the import/export block sits at the foot of the sidebar. */
+.sidebar-actions {
+  margin-top: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.sidebar-actions button {
+  width: 100%;
+  padding: 11px 14px;
+  font-weight: 700;
+}
+
+#importBackup {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+#exportBackup {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+
+#importBackup:hover,
+#exportBackup:hover { filter: brightness(.94); }
+
+#importExcel,
+#exportExcel {
+  background: #fff;
+  border-color: var(--line);
+  color: var(--ink);
+}
 nav button {
   text-align: left;
   border: 1px solid transparent;
@@ -590,9 +625,6 @@ canvas {
 .chart-panel {
   flex: 1;
   min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .chart-panel[hidden] { display: none; }
@@ -620,11 +652,10 @@ canvas {
 #dashboard .kpi small { font-size: 10px; line-height: 1.35; }
 
 #dashboard canvas {
+  /* Fill the panel. A fixed ratio left a third of the panel empty on a tall
+     window; the bar-width cap is what keeps a wide chart looking right. */
   width: 100%;
-  max-width: 1040px;
-  height: auto;
-  aspect-ratio: 16 / 9;
-  max-height: 100%;
+  height: 100%;
 }
 
 .data-grid {
