@@ -5,6 +5,7 @@
   "author": "Maheshwor Bhurtel",
   "main": "src/main.js",
   "scripts": {
+    "test": "node tests/search.test.mjs",
     "start": "electron .",
     "dev": "electron .",
     "publish:preview": "electron . --publish-preview",
