@@ -20,7 +20,7 @@ Functions:
 - **Salary · Take-home Saved**: The same split for what reached you after deductions.
 - **Stock · Win Total**: The latest Actual Win Cumulative recorded that year, with that month's target in the caption.
 - **Outstanding Debt**: All debt records added together, with the number of records and lenders.
-- **Salary chart**: Gross income (blue) and take-home (green) for each month and bonus. Take-home turns red, marked ▼, in any month it falls below half of gross pay. Each bonus has its own shaded column.
+- **Salary chart**: Gross income (blue) and take-home (green) for each month and bonus. Take-home turns red, marked ▼, in any month it falls below half of gross pay. Each bonus has its own shaded column. The axis runs from about ¥50k below the lowest month to ¥50k above the highest, rather than from zero.
 - **Stock chart**: Actual win cumulative against the target (gold). Actual is green, marked ▲, on or above target and red, marked ▼, below it, with the gap between the two lines shaded to match.
 - Months still to come are drawn dashed with hollow markers. Hover over a month to see its figures.
 

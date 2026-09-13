@@ -87,7 +87,14 @@
     </header>
 
     <section id="dashboard" class="view active">
-      <div class="kpi-grid" id="kpis"></div>
+      <aside class="dashboard-insights" aria-label="Dashboard insights">
+        <div class="kpi-grid" id="kpis"></div>
+        <section class="dashboard-summary" aria-labelledby="dashboardSummaryTitle">
+          <p class="eyebrow">At a glance</p>
+          <h3 id="dashboardSummaryTitle">Salary summary</h3>
+          <ul id="dashboardSummary" aria-live="polite"></ul>
+        </section>
+      </aside>
       <section class="panel chart-stack">
         <div class="chart-tabs">
           <div class="chart-tablist" role="tablist" aria-label="Chart">
@@ -335,7 +342,7 @@
             <dt>Outstanding Debt</dt>
             <dd>Every Debt Amount added together, exactly as entered. The caption counts the records and the distinct lenders behind that total.</dd>
             <dt>Salary chart</dt>
-            <dd>Gross income in blue and take-home in green, month by month. Take-home turns red, marked &#9660;, wherever it falls below half of gross pay. Each bonus has its own shaded column, placed where it was paid.</dd>
+            <dd>Gross income in blue and take-home in green, month by month. Take-home turns red, marked &#9660;, wherever it falls below half of gross pay. Each bonus has its own shaded column, placed where it was paid. The axis runs from about &yen;50k below the lowest month to &yen;50k above the highest, rather than from zero, so month-to-month changes are easier to see.</dd>
             <dt>Stock chart</dt>
             <dd>Actual Win Cumulative against Target Cumulative in gold. Actual is green, marked &#9650;, on or above target and red, marked &#9660;, below it, with the gap between the two lines shaded to match. The latest figure is labelled at the end of the line.</dd>
             <dt>Months still to come</dt>

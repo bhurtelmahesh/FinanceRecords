@@ -890,6 +890,79 @@ function monthHasElapsed(record, year, records) {
   return monthNumber <= now.getMonth() + 1;
 }
 
+function valueExtremes(records, key) {
+  if (!records.length) return null;
+  return records.slice(1).reduce(({ highest, lowest }, record) => ({
+    highest: Number(record[key] || 0) > Number(highest[key] || 0) ? record : highest,
+    lowest: Number(record[key] || 0) < Number(lowest[key] || 0) ? record : lowest
+  }), { highest: records[0], lowest: records[0] });
+}
+
+function recentMoneyTrend(records, key, label) {
+  if (records.length < 2) return `More recorded months are needed to show the ${label} trend.`;
+  const recent = records.slice(-3);
+  const first = recent[0];
+  const last = recent.at(-1);
+  const delta = Number(last[key] || 0) - Number(first[key] || 0);
+  const steadyBand = Math.max(1000, Math.abs(Number(first[key] || 0)) * 0.01);
+  if (Math.abs(delta) <= steadyBand) {
+    return `Recent ${label} is steady from ${first.month} to ${last.month}.`;
+  }
+  return `Recent ${label} is ${delta > 0 ? 'rising' : 'falling'}: ${last.month} is ${yen(Math.abs(delta))} ${delta > 0 ? 'above' : 'below'} ${first.month}.`;
+}
+
+function renderDashboardSummary({ year, salary, elapsed, elapsedMonths, projectedMonths, actualIncome, actualSavings, stockLatest, stockRecord, stockTarget }) {
+  const summary = document.querySelector('.dashboard-summary');
+  const title = document.getElementById('dashboardSummaryTitle');
+  let items;
+
+  if (activeChart === 'stock') {
+    title.textContent = 'Stock summary';
+    summary.dataset.focus = 'stock';
+    const stocks = normalizeStockYear(year).filter(stockHasActual);
+    if (!stocks.length) {
+      items = [`No stock result recorded for ${year} yet.`, 'Add at least two monthly actuals to see highs, lows and a recent trend.'];
+    } else {
+      const gap = stockLatest - stockTarget;
+      const extremes = valueExtremes(stocks, 'actualCumulative');
+      const moves = stocks.slice(1);
+      const moveExtremes = valueExtremes(moves, 'monthlyRevenue');
+      items = [
+        stockRecord && stockTarget
+          ? `Latest result is ${gap >= 0 ? `${yen(gap)} ahead of` : `${yen(Math.abs(gap))} below`} the ${stockRecord.month} cumulative target.`
+          : `Latest recorded result is ${yen(stockLatest)} in ${stockRecord?.month || year}.`,
+        `Highest cumulative result was ${yen(extremes.highest.actualCumulative)} in ${extremes.highest.month}; lowest was ${yen(extremes.lowest.actualCumulative)} in ${extremes.lowest.month}.`,
+        !moves.length ? 'Add another monthly actual to compare month-to-month movement.'
+          : moves.length === 1 ? `The recorded month-to-month move was ${yen(moves[0].monthlyRevenue)} in ${moves[0].month}.`
+          : `Best monthly move was ${yen(moveExtremes.highest.monthlyRevenue)} in ${moveExtremes.highest.month}; weakest was ${yen(moveExtremes.lowest.monthlyRevenue)} in ${moveExtremes.lowest.month}.`,
+        recentMoneyTrend(stocks, 'actualCumulative', 'cumulative stock trend')
+      ];
+    }
+  } else {
+    title.textContent = 'Salary summary';
+    summary.dataset.focus = 'salary';
+    const monthlySalary = sortRecordsByMonth(elapsed)
+      .filter((record) => monthIndex(record.month) > 0 && Number(record.salary || 0) !== 0);
+    const extremes = valueExtremes(monthlySalary, 'salary');
+    const progress = elapsedMonths
+      ? `${elapsedMonths} salary month${elapsedMonths === 1 ? '' : 's'} recorded${projectedMonths ? `; ${projectedMonths} future month${projectedMonths === 1 ? '' : 's'} included in projections` : ''}.`
+      : `No completed salary months recorded for ${year} yet.`;
+    const takeHome = actualIncome
+      ? `Take-home is ${Math.round((actualSavings / actualIncome) * 100)}% of recorded gross income.`
+      : 'Take-home percentage will appear once salary is recorded.';
+    items = [
+      `${progress} ${takeHome}`,
+      extremes
+        ? `Highest monthly gross was ${yen(extremes.highest.salary)} in ${extremes.highest.month}; lowest was ${yen(extremes.lowest.salary)} in ${extremes.lowest.month}.`
+        : 'Monthly highs and lows will appear once salary is recorded.',
+      recentMoneyTrend(monthlySalary, 'salary', 'monthly gross trend')
+    ];
+  }
+
+  document.getElementById('dashboardSummary').innerHTML = items
+    .map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+}
+
 function renderKpis() {
   const year = currentYear();
   const salary = (state.salary || []).filter((item) => Number(item.year) === year);
@@ -926,6 +999,7 @@ function renderKpis() {
   document.getElementById('kpis').innerHTML = kpis.map(([label, value, cls, hint, tone, view]) =>
     `<button type="button" class="kpi ${cls} ${tone}" data-view="${view}" aria-label="${escapeHtml(label)} — open ${escapeHtml(titles[view])}"><span>${label}</span><strong>${value}</strong>${hint ? `<small>${escapeHtml(hint)}</small>` : ''}</button>`
   ).join('');
+  renderDashboardSummary({ year, salary, elapsed, elapsedMonths, projectedMonths, actualIncome, actualSavings, stockLatest, stockRecord, stockTarget });
 }
 
 // Both dashboard charts share one frame — a wrapping legend, a round-number
@@ -961,10 +1035,11 @@ function chartYen(value) {
 // Steps of 1, 2, 2.5 or 5 × a power of ten, so ticks read ¥100k / ¥200k rather
 // than equal eighths of the maximum (¥44k, ¥131k). The 4% pad keeps the tallest
 // mark off the top line. Of the steps nearest the wanted tick count, the one that
-// wastes the least room above the data wins. Without `includeZero` (a zoomed-in
-// chart) the axis fits the figures instead, never crossing zero when they all sit
-// on one side of it.
-function niceScale(values, targetTicks, includeZero = true) {
+// wastes the least room above the data wins. Without `includeZero` the axis fits
+// the figures instead - with `margin` yen either side, or 8% of their range - and
+// never crosses zero when they all sit on one side of it. Either way the ends
+// round outwards to a whole step, so every tick keeps a round label.
+function niceScale(values, targetTicks, { includeZero = true, margin } = {}) {
   if (!values.length) return null;
   let hi = Math.max(...values);
   let lo = Math.min(...values);
@@ -972,7 +1047,7 @@ function niceScale(values, targetTicks, includeZero = true) {
     hi = Math.max(0, hi) * 1.04;
     lo = Math.min(0, lo) * 1.04;
   } else {
-    const pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.1 || 1;
+    const pad = margin ?? ((hi - lo) * 0.08 || Math.abs(hi) * 0.1 || 1);
     hi = hi <= 0 ? Math.min(0, hi + pad) : hi + pad;
     lo = lo >= 0 ? Math.max(0, lo - pad) : lo - pad;
   }
@@ -1112,16 +1187,20 @@ function drawMonthChart(canvas, chart, hoverIndex = -1) {
   ctx.font = chartFont;
   ctx.textBaseline = 'middle';
 
-  // The whole year sits on a zero baseline. Zoomed in, the axis fits the months
-  // in view — plus the one just past each edge, so a line leaving the plot is not
-  // cut off — the way a trading chart does. A year with nothing to plot keeps just
-  // the zero line and says so.
+  // The whole year sits on a zero baseline, unless the chart asks for a fixed
+  // margin around its figures instead (Salary: ¥50k either side, since pay never
+  // nears zero). Zoomed in, the axis fits the months in view — plus the one just
+  // past each edge, so a line leaving the plot is not cut off — the way a trading
+  // chart does. A year with nothing to plot keeps just the zero line and says so.
   const allValues = labels.flatMap((_, i) => chart.valuesAt(i));
   const hasData = allValues.some((value) => value !== 0);
   const first = Math.max(0, Math.floor(view.start - 0.5));
   const last = Math.min(labels.length - 1, Math.ceil(view.end - 0.5));
   const viewValues = view.full ? allValues : labels.slice(first, last + 1).flatMap((_, k) => chart.valuesAt(first + k));
-  const scale = niceScale(viewValues.length ? viewValues : allValues, h < 340 ? 4 : 5, view.full)
+  const axis = !view.full ? { includeZero: false }
+    : chart.axisMargin !== undefined ? { includeZero: false, margin: chart.axisMargin }
+    : { includeZero: true };
+  const scale = niceScale(viewValues.length ? viewValues : allValues, h < 340 ? 4 : 5, axis)
     || { min: 0, max: 1, step: 1 };
   const ticks = hasData
     ? Array.from({ length: Math.round((scale.max - scale.min) / scale.step) + 1 }, (_, k) => scale.min + k * scale.step)
@@ -1264,6 +1343,8 @@ function salaryChart(year) {
   return {
     labels: rows.map((row) => row.label),
     valuesAt: (i) => (rows[i].hasFigures ? [rows[i].gross, rows[i].takeHome] : []),
+    // From the lowest month less ¥50k to the highest plus ¥50k, not from zero.
+    axisMargin: 50000,
     bonus: rows.map((row) => row.bonus),
     legend,
     emptyText: `No salary figures for ${year} yet`,
@@ -1630,6 +1711,7 @@ function switchChart(chart) {
     tab.tabIndex = selected ? 0 : -1;
     panel.hidden = !selected;
   });
+  renderKpis();
   renderCharts();
 }
 
