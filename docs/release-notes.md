@@ -1,5 +1,15 @@
 # Finance Records Release Notes
 
+## Unreleased
+
+Brings across the web app's dashboard and search improvements.
+
+- Dashboard charts are redrawn as lines on round-number axes. Salary shows gross income and take-home, with take-home turning red below half of gross; Stock shows actual against target, green above and red below, with the gap shaded. Months still to come are dashed, bonuses have their own column, and hovering a month shows its figures.
+- The charts zoom like a trading chart: scroll or pinch to zoom in on a few months, drag to move along the year, double-click or Reset to see the whole year. Zoomed in, the axis fits the months in view.
+- A bonus now counts as projected until the month it is paid, so an unpaid December bonus no longer shows in the "so far" totals, the projected tags or the workbook Summary sheet.
+- Search covers the Help page as well as the records, and opens a Help result at the matching entry.
+- Menu items look like buttons at rest and take a clear hover colour. Help spans the window and explains how to read and zoom the charts.
+
 ## Version 1.0.0
 
 Finance Records is a desktop finance tracker for macOS. It brings salary, savings, overtime, stock revenue, daily records, debt records, and document archives into one app.

@@ -38,8 +38,7 @@ npm run dist:mas
 
 ## What It Includes
 
-- Dashboard with salary, savings, stock revenue, and debt KPIs
-- Financial snapshot insights
+- Dashboard with salary, savings, stock revenue, and debt KPIs, plus zoomable salary and stock charts
 - Salary and savings records
 - Monthly salary details with allowances, overtime, deductions, and received amount
 - Overtime records
@@ -53,7 +52,7 @@ npm run dist:mas
 - Start blank option for new users
 - Demo data option for screenshots and evaluation
 - Clear all data option with backup warning
-- Search across records
+- Search across records and the Help page
 
 ## Data Storage
 

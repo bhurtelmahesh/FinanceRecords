@@ -11,18 +11,27 @@ After setup, records are saved in the app automatically when changes are made. T
 
 ## 2. Dashboard
 
-The Dashboard gives a summary of the selected year.
+The Dashboard gives a summary of the selected year. Each figure is a button that opens the section it comes from.
 
 Functions:
 
-- **Year selector**: Changes the year shown in the dashboard charts and KPIs.
-- **Total Net Income**: Total received income for the selected year.
-- **Actual Savings**: Total calculated savings for the selected year.
-- **Stock Win Total**: Latest actual stock win cumulative value for the selected year.
-- **Outstanding Debt**: Total debt records currently saved.
-- **Net Income vs Savings chart**: Compares monthly net income and savings.
-- **Stock Win Target chart**: Compares stock target and actual win progress.
-- **Monthly Snapshot**: Shows savings vs goal, daily record total, and recorded days.
+- **Year selector**: Changes the year shown in the dashboard charts and figures.
+- **Salary · Gross Income**: Gross pay for the months that have already happened, including any bonus already paid. While months are still to come, the caption gives the projected full-year figure.
+- **Salary · Take-home Saved**: The same split for what reached you after deductions.
+- **Stock · Win Total**: The latest Actual Win Cumulative recorded that year, with that month's target in the caption.
+- **Outstanding Debt**: All debt records added together, with the number of records and lenders.
+- **Salary chart**: Gross income (blue) and take-home (green) for each month and bonus. Take-home turns red, marked ▼, in any month it falls below half of gross pay. Each bonus has its own shaded column.
+- **Stock chart**: Actual win cumulative against the target (gold). Actual is green, marked ▲, on or above target and red, marked ▼, below it, with the gap between the two lines shaded to match.
+- Months still to come are drawn dashed with hollow markers. Hover over a month to see its figures.
+
+A bonus counts as received from the month it is paid: the year's first bonus from June, a later one from December. Until then it is projected, like a month that has not happened yet.
+
+Zooming the charts:
+
+- Scroll or pinch over a chart, or use the magnifier buttons, to zoom in on the months around the pointer.
+- Drag sideways to move along the year while zoomed in.
+- Double-click the chart or press **Reset** to see the whole year again. Changing the year does the same.
+- Zoomed in, the axis fits the months in view, so small differences are easier to see.
 
 ## 3. Monthly Savings
 
@@ -178,12 +187,13 @@ Important:
 
 ## 10. Search
 
-Use the top-right search box to filter records in the current tables.
+Use the top-right search box to search every record and the Help page at once.
 
 Functions:
 
-- Searches visible records by text or number.
-- Clearing the search box restores the full list.
+- Results appear as you type words or numbers, grouped by section, with Help listed last.
+- Choose a result to open its section with the matching row highlighted. A Help result opens Help at the matching entry.
+- Press Escape or clear the search box to close the results.
 
 ## 11. Save
 
