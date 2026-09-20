@@ -4,6 +4,7 @@ dist/
 .DS_Store
 *.xlsx
 finance-data.json
+FinanceRecords-Backup-*.json
 embedded.provisionprofile
 *.dmg
 *.zip
