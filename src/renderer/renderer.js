@@ -1,4 +1,14 @@
 import { searchRecords as findSearchRecords, searchSnippet } from './search.mjs';
+import { calculateSavings, stockPerformanceTone } from './finance-metrics.mjs';
+import { buildSalaryLedger } from './salary-ledger.mjs';
+import { isBonusMonth, monthHasElapsed, monthIndex, monthOptions, normalizeMonth } from './finance-calendar.mjs';
+import { migrateLoadedData, normalizeExpenseRecord } from './backup-migration.mjs';
+
+let firebaseClientPromise = null;
+function firebaseClient() {
+  firebaseClientPromise ||= import('./firebase-client.mjs');
+  return firebaseClientPromise;
+}
 
 let state = null;
 let activeView = 'dashboard';
@@ -9,11 +19,43 @@ let searchHighlightTimer = null;
 let saveVersion = 0;
 let persistedSaveVersion = 0;
 let activeSaveCount = 0;
+let accountUser = null;
+let cloudSyncEnabled = false;
+let accountTransitioning = false;
+
+const themeStorageKey = 'finance-records-theme';
+const themeOrder = ['ocean', 'dark'];
+const themeLabels = { ocean: 'Ocean', dark: 'Dark' };
+
+function preferredTheme() {
+  const saved = localStorage.getItem(themeStorageKey);
+  if (themeOrder.includes(saved)) return saved;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'ocean';
+}
+
+function applyTheme(theme, persist = true) {
+  const selected = themeOrder.includes(theme) ? theme : 'ocean';
+  document.documentElement.dataset.theme = selected;
+  const button = document.getElementById('themeButton');
+  const next = themeOrder[(themeOrder.indexOf(selected) + 1) % themeOrder.length];
+  if (button) {
+    button.dataset.theme = selected;
+    button.setAttribute('aria-checked', String(selected === 'dark'));
+    button.setAttribute('aria-label', `Dark theme. ${themeLabels[selected]} selected`);
+    button.title = `Theme: ${themeLabels[selected]} - switch to ${themeLabels[next]}`;
+  }
+  const text = document.getElementById('themeButtonText');
+  if (text) text.textContent = `${themeLabels[selected]} theme`;
+  Object.assign(chartInk, chartPalettes[selected]);
+  if (persist) localStorage.setItem(themeStorageKey, selected);
+  if (state) requestAnimationFrame(renderDashboard);
+}
 
 const schemas = {
   salary: [
     ['year', 'Year', 'number'], ['month', 'Month'], ['salary', 'Gross Income', 'number'],
-    ['plannedSavings', 'Savings Goal', 'number'], ['actualSavings', 'Actual Savings', 'number'],
+    ['takeHome', 'Take-home', 'number'], ['plannedSavings', 'Savings Goal', 'number'],
+    ['expenseTotal', 'Expenditures', 'number'], ['actualSavings', 'Actual Savings', 'number'],
     ['cumulativeCapital', 'Cumulative Capital', 'number']
   ],
   monthlyDetails: [
@@ -37,6 +79,9 @@ const schemas = {
     ['year', 'Year', 'number'], ['month', 'Month'], ['day', 'Day', 'number'],
     ['amount', 'Amount', 'number'], ['status', 'Status'], ['note', 'Note']
   ],
+  expenses: [
+    ['date', 'Date', 'date'], ['category', 'Category / Name'], ['amount', 'Amount', 'number'], ['note', 'Note']
+  ],
   personalBalances: [
     ['group', 'Lender'], ['dateOrLabel', 'Due Date / Name'], ['amount', 'Debt Amount', 'number'], ['note', 'Note']
   ]
@@ -44,24 +89,25 @@ const schemas = {
 
 const titles = {
   dashboard: 'Dashboard',
-  salary: 'Monthly Savings',
-  details: 'Salary Details',
+  salary: 'Salary & Savings',
   overtime: 'Overtime',
   stocks: 'Stock Revenue',
   daily: 'Daily Records',
+  expenses: 'Expenditures',
   balances: 'Debt Records',
   data: 'Backup & Import',
   help: 'Help'
 };
 
-const collections = ['salary', 'monthlyDetails', 'overtime', 'stockRevenue', 'daily', 'personalBalances'];
+const collections = ['salary', 'monthlyDetails', 'overtime', 'stockRevenue', 'daily', 'expenses', 'personalBalances'];
 
 const searchSections = [
-  { collection: 'salary', view: 'salary', label: 'Monthly Savings', keywords: ['salary', 'income', 'savings'] },
-  { collection: 'monthlyDetails', view: 'details', label: 'Salary Details', keywords: ['salary', 'payroll', 'income'] },
+  { collection: 'salary', view: 'salary', label: 'Salary & Savings', keywords: ['salary', 'income', 'savings', 'take-home', 'payslip'] },
+  { collection: 'monthlyDetails', view: 'salary', label: 'Payslips', keywords: ['salary', 'payroll', 'income', 'payslip'] },
   { collection: 'overtime', view: 'overtime', label: 'Overtime', keywords: ['overtime', 'ot'] },
   { collection: 'stockRevenue', view: 'stocks', label: 'Stock Revenue', keywords: ['stock', 'stocks', 'revenue', 'win'] },
   { collection: 'daily', view: 'daily', label: 'Daily Records', keywords: ['daily', 'stock', 'trading'] },
+  { collection: 'expenses', view: 'expenses', label: 'Expenditures', keywords: ['expense', 'expenses', 'spending', 'cost'] },
   { collection: 'personalBalances', view: 'balances', label: 'Debt Records', keywords: ['debt', 'balance', 'lender'] },
   // Last, so records always list ahead of the explanations.
   {
@@ -81,14 +127,20 @@ const archiveFields = [
 ];
 
 const workbookSheets = [
-  ['Monthly Savings', 'salary', () => schemas.salary],
-  ['Salary Details', 'monthlyDetails', () => schemas.monthlyDetails],
+  ['Salary & Savings', 'salary', () => schemas.salary],
+  ['Payslips', 'monthlyDetails', () => schemas.monthlyDetails],
   ['Overtime', 'overtime', () => schemas.overtime],
   ['Stock Revenue', 'stockRevenue', () => schemas.stockRevenue],
   ['Daily Records', 'daily', () => schemas.daily],
+  ['Expenses', 'expenses', () => schemas.expenses],
   ['Debt Records', 'personalBalances', () => schemas.personalBalances],
   ['Salary Sheet Archive', 'salarySheets', () => archiveFields],
   ['Unpaid Bills Archive', 'unpaidBills', () => archiveFields]
+];
+
+const legacyExpenseFields = [
+  ['year', 'Year', 'number'], ['month', 'Month'], ['day', 'Day', 'number'],
+  ['category', 'Category / Name'], ['amount', 'Amount', 'number'], ['note', 'Note']
 ];
 
 function buildWorkbookSheets(data) {
@@ -96,6 +148,10 @@ function buildWorkbookSheets(data) {
   const summary = years.map((year) => {
     const rows = (data.salary || []).filter((item) => Number(item.year) === year);
     const elapsed = rows.filter((item) => monthHasElapsed(item, year, rows));
+    const yearExpenses = (data.expenses || []).filter((item) => Number(item.year) === year);
+    const elapsedExpenses = yearExpenses.filter((item) => monthHasElapsed(item, year, yearExpenses));
+    const takeHome = sum(elapsed, 'takeHome');
+    const expenditureTotal = sum(elapsedExpenses, 'amount');
     const stock = (data.stockRevenue || [])
       .filter((item) => Number(item.year) === year && Number(item.actualCumulative || 0) !== 0)
       .sort((a, b) => monthIndex(a.month) - monthIndex(b.month)).at(-1);
@@ -103,7 +159,9 @@ function buildWorkbookSheets(data) {
       'Year': year,
       'Gross Income (so far)': sum(elapsed, 'salary'),
       'Gross Income (full year)': sum(rows, 'salary'),
-      'Take-home Saved (so far)': sum(elapsed, 'actualSavings'),
+      'Take-home (so far)': takeHome,
+      'Expenditures (so far)': expenditureTotal,
+      'Savings (so far)': calculateSavings(takeHome, expenditureTotal),
       'Savings Goal (so far)': sum(elapsed, 'plannedSavings'),
       'Stock Win Total': Number(stock?.actualCumulative || 0),
       'Daily Stock Entries': (data.daily || []).filter((item) => Number(item.year) === year && Number(item.amount) !== 0).length
@@ -112,7 +170,7 @@ function buildWorkbookSheets(data) {
   const sheets = [{
     name: 'Summary',
     rows: summary,
-    widths: [{ wch: 8 }, { wch: 20 }, { wch: 22 }, { wch: 22 }, { wch: 20 }, { wch: 16 }, { wch: 18 }]
+    widths: [{ wch: 8 }, { wch: 20 }, { wch: 22 }, { wch: 20 }, { wch: 23 }, { wch: 20 }, { wch: 20 }, { wch: 16 }, { wch: 18 }]
   }];
   workbookSheets.forEach(([name, collection, fieldsFor]) => {
     const fields = fieldsFor();
@@ -132,8 +190,11 @@ function recordsFromWorkbook(sheets, fileName) {
     meta: { version: 1, sourceFile: fileName || '', importedAt: new Date().toISOString() }
   };
   workbookSheets.forEach(([name, collection, fieldsFor]) => {
-    const rows = (sheets || {})[name] || [];
-    const fields = fieldsFor();
+    const legacyExpenseRows = collection === 'expenses' && !(sheets || {})[name]
+      ? (sheets || {}).Expenditures
+      : null;
+    const rows = (sheets || {})[name] || legacyExpenseRows || [];
+    const fields = legacyExpenseRows ? legacyExpenseFields : fieldsFor();
     imported[collection] = rows.map((row) => {
       const record = {};
       fields.forEach(([key, label, type]) => {
@@ -150,15 +211,7 @@ const computedFields = {
   monthlyDetails: ['grossTotal', 'totalDeduction', 'received'],
   overtime: ['amount'],
   stockRevenue: ['monthlyRevenue', 'surplus', 'verdict'],
-  salary: ['savingsRate']
-};
-const monthOptions = [
-  ['Jan', 'Jan'], ['Feb', 'Feb'], ['Mar', 'Mar'], ['Apr', 'Apr'], ['May', 'May'], ['Jun', 'Jun'],
-  ['Jul', 'Jul'], ['Aug', 'Aug'], ['Sep', 'Sep'], ['Oct', 'Oct'], ['Nov', 'Nov'], ['Dec', 'Dec']
-];
-const fullMonthNames = {
-  january: 'Jan', february: 'Feb', march: 'Mar', april: 'Apr', may: 'May', june: 'Jun', july: 'Jul',
-  august: 'Aug', september: 'Sep', october: 'Oct', november: 'Nov', december: 'Dec'
+  salary: ['expenseTotal', 'actualSavings', 'cumulativeCapital', 'savingsRate']
 };
 
 function yen(value) {
@@ -277,6 +330,9 @@ function searchResultTitle(section, record) {
   if (section.collection === 'personalBalances') {
     return [record.group, record.dateOrLabel].filter(Boolean).join(' · ') || 'Debt record';
   }
+  if (section.collection === 'expenses') {
+    return [record.category, record.date].filter(Boolean).join(' · ') || 'Expenditure';
+  }
   const period = [normalizeMonth(record.month) || record.month, record.day, record.year]
     .filter((value) => value !== undefined && value !== null && value !== '')
     .join(' · ');
@@ -316,6 +372,9 @@ function defaultSearchResultSummary(section, record) {
   if (section.collection === 'daily') {
     const detail = record.note || record.status;
     return `${yen(record.amount)}${detail ? ` · ${truncateSearchValue(detail)}` : ''}`;
+  }
+  if (section.collection === 'expenses') {
+    return `${yen(record.amount)}${record.note ? ` · ${truncateSearchValue(record.note)}` : ''}`;
   }
   return `${yen(record.amount)}${record.note ? ` · ${truncateSearchValue(record.note)}` : ''}`;
 }
@@ -387,10 +446,11 @@ function setSearchDestinationFilters(section, record) {
   const dailyMonth = narrowScreen() ? month : '';
   const filterValues = {
     salary: [['salaryYearFilter', year]],
-    monthlyDetails: [['detailsYearFilter', year]],
+    monthlyDetails: [['salaryYearFilter', year]],
     overtime: [['otYearFilter', year], ['otMonthFilter', month]],
     stockRevenue: [['stockYearFilter', year]],
     daily: [['dailyYearFilter', year], ['dailyMonthFilter', dailyMonth]],
+    expenses: [['expenseYearFilter', year], ['expenseMonthFilter', month]],
     personalBalances: []
   }[section.collection] || [];
   filterValues.forEach(([idName, value]) => {
@@ -462,6 +522,156 @@ function showSetupIfNeeded() {
   overlay.hidden = hasRecords() || Boolean(state.meta?.startedAt);
 }
 
+function dataHasRecords(data) {
+  return collections.some((collection) => (data?.[collection] || []).length > 0);
+}
+
+function dataHasArchives(data) {
+  return ['salarySheets', 'unpaidBills'].some((collection) => (data?.[collection] || []).length > 0);
+}
+
+function cloudDataPath(user = accountUser) {
+  return `Firebase cloud sync · ${user?.email || user?.displayName || 'signed in'}`;
+}
+
+function updateAccountUI(message = '') {
+  const signedIn = Boolean(accountUser);
+  const accountName = document.getElementById('accountName');
+  if (!accountName) return;
+  accountName.textContent = signedIn ? (accountUser.displayName || accountUser.email || 'Signed in') : 'Local only';
+  document.getElementById('accountMode').textContent = message || (signedIn && cloudSyncEnabled
+    ? 'Records sync between devices'
+    : 'Records stay on this Mac');
+  document.getElementById('accountSignIn').hidden = signedIn;
+  document.getElementById('setupSignIn').hidden = signedIn;
+  document.getElementById('accountSignOut').hidden = !signedIn;
+  document.getElementById('accountSyncNow').hidden = !signedIn || !cloudSyncEnabled;
+}
+
+function cloudStateWithLocalArchives(cloudData, localData, user) {
+  const next = normalizeLoadedData({
+    ...cloudData,
+    salarySheets: localData.salarySheets || [],
+    unpaidBills: localData.unpaidBills || []
+  });
+  next.meta = { ...next.meta, dataPath: cloudDataPath(user) };
+  return next;
+}
+
+async function saveDeviceCopy(data = state) {
+  if (accountUser) return window.financeApi.saveAccount(accountUser.uid, data);
+  return window.financeApi.save(data);
+}
+
+async function persistCloudCopy() {
+  if (!accountUser || !cloudSyncEnabled) return false;
+  if (!navigator.onLine) {
+    state.meta.cloudPending = true;
+    await saveDeviceCopy();
+    updateAccountUI('Offline · changes kept on this Mac');
+    return false;
+  }
+  const { saveCloudState } = await firebaseClient();
+  await saveCloudState(accountUser.uid, state);
+  state.meta.cloudPending = false;
+  state.meta.dataPath = cloudDataPath();
+  await saveDeviceCopy();
+  updateAccountUI('Cloud sync is up to date');
+  return true;
+}
+
+async function syncAccountNow() {
+  if (!accountUser || !cloudSyncEnabled || accountTransitioning) return;
+  setSaveState('Syncing...');
+  updateAccountUI('Syncing records...');
+  try {
+    await persistCloudCopy();
+    setSaveState(navigator.onLine ? 'Synced' : 'Saved offline');
+  } catch (error) {
+    console.error(error);
+    state.meta.cloudPending = true;
+    await saveDeviceCopy();
+    setSaveState('Sync failed');
+    updateAccountUI('Cloud unavailable · changes kept on this Mac');
+  }
+}
+
+async function activateAccount(user) {
+  if (accountTransitioning) return;
+  accountTransitioning = true;
+  const localBeforeSignIn = state;
+  accountUser = user;
+  cloudSyncEnabled = false;
+  updateAccountUI('Connecting to Firebase...');
+  setSaveState('Connecting...');
+  try {
+    const cached = normalizeLoadedData(await window.financeApi.loadAccount(user.uid) || emptyData());
+    const archiveSource = dataHasArchives(cached) ? cached : localBeforeSignIn;
+    const { loadCloudState } = await firebaseClient();
+    const cloud = await loadCloudState(user.uid);
+    if (cloud.exists) {
+      state = cloudStateWithLocalArchives(cloud.data, archiveSource, user);
+      cloudSyncEnabled = true;
+      await saveDeviceCopy();
+    } else {
+      const migrationSource = dataHasRecords(localBeforeSignIn) || dataHasArchives(localBeforeSignIn)
+        ? localBeforeSignIn
+        : cached;
+      const shouldMigrate = (dataHasRecords(migrationSource) || dataHasArchives(migrationSource)) && confirm(
+        'Move this Mac\'s financial records into your account?\n\nRecords will sync through Firebase. Archived salary sheets and bill files remain only on this Mac. Your local copy will not be deleted.'
+      );
+      state = shouldMigrate ? normalizeLoadedData(migrationSource) : emptyData();
+      state.salarySheets = migrationSource.salarySheets || [];
+      state.unpaidBills = migrationSource.unpaidBills || [];
+      state.meta.startedAt = state.meta.startedAt || new Date().toISOString();
+      state.meta.dataPath = cloudDataPath(user);
+      cloudSyncEnabled = true;
+      await saveDeviceCopy();
+      if (navigator.onLine) await persistCloudCopy();
+    }
+    updateAccountUI(navigator.onLine ? 'Cloud sync is up to date' : 'Offline · changes kept on this Mac');
+    setSaveState(navigator.onLine ? 'Synced' : 'Saved offline');
+  } catch (error) {
+    console.error(error);
+    const cached = await window.financeApi.loadAccount(user.uid);
+    state = normalizeLoadedData(cached || localBeforeSignIn);
+    state.meta.dataPath = `Account cache · ${user.email || user.displayName || 'signed in'}`;
+    cloudSyncEnabled = true;
+    updateAccountUI('Cloud unavailable · using this Mac’s cache');
+    setSaveState('Offline cache');
+  } finally {
+    accountTransitioning = false;
+    render();
+  }
+}
+
+async function activateLocalMode() {
+  if (accountTransitioning) return;
+  accountTransitioning = true;
+  accountUser = null;
+  cloudSyncEnabled = false;
+  const { resetCloudBaseline } = await firebaseClient();
+  resetCloudBaseline();
+  state = normalizeLoadedData(await window.financeApi.load());
+  updateAccountUI();
+  setSaveState('Local mode');
+  accountTransitioning = false;
+  render();
+}
+
+async function beginGoogleSignIn() {
+  setSaveState('Opening sign in...');
+  try {
+    const { signInWithGoogle } = await firebaseClient();
+    await signInWithGoogle();
+  } catch (error) {
+    console.error(error);
+    const cancelled = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'].includes(error?.code);
+    setSaveState(cancelled ? 'Sign in cancelled' : 'Sign in failed');
+    if (!cancelled) alert(error?.message || 'Google sign-in failed.');
+  }
+}
+
 let saveErrorNotified = false;
 
 async function save() {
@@ -470,16 +680,31 @@ async function save() {
   updateSaveButton();
   setSaveState('Saving...');
   try {
-    await window.financeApi.save(state);
+    state = await saveDeviceCopy(state);
+    if (cloudSyncEnabled) await persistCloudCopy();
     persistedSaveVersion = Math.max(persistedSaveVersion, version);
-    setSaveState('Saved');
-    setTimeout(() => setSaveState('Ready'), 1200);
+    setSaveState(cloudSyncEnabled ? (navigator.onLine ? 'Synced' : 'Saved offline') : 'Saved');
+    if (!cloudSyncEnabled) setTimeout(() => setSaveState('Ready'), 1200);
   } catch (error) {
     console.error(error);
-    setSaveState('Save failed');
+    state.meta.cloudPending = Boolean(cloudSyncEnabled);
+    if (cloudSyncEnabled) {
+      try {
+        state = await saveDeviceCopy(state);
+        persistedSaveVersion = Math.max(persistedSaveVersion, version);
+      } catch (localError) {
+        console.error(localError);
+      }
+      updateAccountUI('Cloud sync failed · changes kept on this Mac');
+      setSaveState('Saved locally');
+    } else {
+      setSaveState('Save failed');
+    }
     if (!saveErrorNotified) {
       saveErrorNotified = true;
-      alert(error?.message || 'Saving failed. Export a JSON backup so you do not lose records.');
+      alert(cloudSyncEnabled
+        ? 'Your change is saved on this Mac, but cloud sync failed. Use Sync now when the connection is available.'
+        : (error?.message || 'Saving failed. Export a JSON backup so you do not lose records.'));
     }
   } finally {
     activeSaveCount -= 1;
@@ -551,33 +776,6 @@ function currentYear() {
 
 function sum(records, key) {
   return (records || []).reduce((total, item) => total + Number(item[key] || 0), 0);
-}
-
-function monthIndex(month) {
-  const value = String(month || '').trim();
-  const lower = value.toLowerCase();
-  const fullName = fullMonthNames[lower];
-  if (fullName) return monthOptions.findIndex(([key]) => key === fullName) + 1;
-  const prefixedIdx = monthOptions.findIndex(([key]) => lower.startsWith(key.toLowerCase()));
-  if (prefixedIdx >= 0) return prefixedIdx + 1;
-  const idx = monthOptions.findIndex(([key]) => key.toLowerCase() === lower);
-  if (idx >= 0) return idx + 1;
-  const parsed = Number(value.replace(/[^0-9]/g, ''));
-  return Number.isFinite(parsed) && parsed >= 1 && parsed <= 12 ? parsed : 0;
-}
-
-function normalizeMonth(month) {
-  const lower = String(month || '').trim().toLowerCase();
-  const fullName = fullMonthNames[lower];
-  if (fullName) return fullName;
-  const prefixed = monthOptions.find(([key]) => lower.startsWith(key.toLowerCase()));
-  if (prefixed) return prefixed[0];
-  const idx = monthIndex(month);
-  return idx ? monthOptions[idx - 1][0] : String(month || '');
-}
-
-function isBonusMonth(month) {
-  return /bonus|賞与|ボーナス/i.test(String(month || ''));
 }
 
 function sortRecordsByMonth(records) {
@@ -795,20 +993,6 @@ function overtimeAmountFor(year, month) {
   return sum(records, 'amount');
 }
 
-// Each month carries on from the month before it; every new year starts from zero.
-function withCumulativeCapital(ordered) {
-  let year = null;
-  let running = 0;
-  return ordered.map((item) => {
-    if (Number(item.year) !== year) {
-      year = Number(item.year);
-      running = 0;
-    }
-    running += Number(item.actualSavings || 0);
-    return { ...item, cumulativeCapital: running };
-  });
-}
-
 function derivedSalaryRecords() {
   const existing = new Map((state.salary || []).map((item) =>
     [`${Number(item.year)}-${normalizeMonth(item.month)}`, item]
@@ -819,18 +1003,18 @@ function derivedSalaryRecords() {
     const month = normalizeMonth(detail.month);
     const previous = existing.get(`${year}-${month}`) || {};
     const { grossTotal, received } = monthlyPayroll(detail, overtimePayFor(detail, year, month));
-    // Savings is take-home pay. Stock movements live in Daily Records and Stock
-    // Revenue and are never netted off the salary side.
-    const actualSavings = received;
+    const takeHome = received;
     return {
       ...previous,
       id: previous.id || id('salary'),
       year,
       month,
       salary: grossTotal,
+      takeHome,
       plannedSavings: Number(previous.plannedSavings || 0),
-      actualSavings,
-      savingsRate: grossTotal ? actualSavings / grossTotal : 0,
+      expenseTotal: 0,
+      actualSavings: takeHome,
+      savingsRate: grossTotal ? takeHome / grossTotal : 0,
       cumulativeCapital: Number(previous.cumulativeCapital || 0),
       note: previous.note || '',
       derivedFromDetail: true
@@ -839,8 +1023,27 @@ function derivedSalaryRecords() {
   const detailKeys = new Set(derived.map((item) => `${item.year}-${item.month}`));
   const manualOnly = (state.salary || [])
     .filter((item) => !detailKeys.has(`${Number(item.year)}-${normalizeMonth(item.month)}`))
-    .map(({ derivedFromDetail, ...rest }) => rest);
-  return withCumulativeCapital(sortRecordsByMonth([...derived, ...manualOnly]));
+    .map(({ derivedFromDetail, ...rest }) => {
+      const takeHome = Number(rest.takeHome ?? rest.actualSavings ?? 0);
+      return {
+        ...rest,
+        takeHome,
+        expenseTotal: 0,
+        actualSavings: takeHome,
+        savingsRate: Number(rest.salary || 0) ? takeHome / Number(rest.salary || 0) : 0
+      };
+    });
+  return buildSalaryLedger(sortRecordsByMonth([...derived, ...manualOnly]), state.expenses)
+    .filter((item) => !item.derivedFromExpenses);
+}
+
+function selectedExpenseYear() {
+  const years = yearsFrom(state.expenses);
+  return Number(document.getElementById('expenseYearFilter')?.value || years[years.length - 1] || currentYear());
+}
+
+function selectedExpenseMonth() {
+  return document.getElementById('expenseMonthFilter')?.value || '';
 }
 
 function selectedOtYear() {
@@ -874,22 +1077,6 @@ function latestStockActualForYear(year) {
   return Number(latestStockRecordForYear(year)?.actualCumulative || 0);
 }
 
-// Whether a month has happened is a calendar question. A bonus counts from the
-// month it is paid in: June for the year's first, December for any later one — the
-// order sortRecordsByMonth files them in. `records` is the list the row came from,
-// which says which of the year's bonuses it is.
-function monthHasElapsed(record, year, records) {
-  let monthNumber = monthIndex(record.month);
-  if (isBonusMonth(record.month)) {
-    const bonuses = records.filter((item) => Number(item.year) === Number(year) && isBonusMonth(item.month));
-    monthNumber = bonuses.indexOf(record) > 0 ? 12 : 6;
-  }
-  if (!monthNumber) return true;
-  const now = new Date();
-  if (Number(year) !== now.getFullYear()) return Number(year) < now.getFullYear();
-  return monthNumber <= now.getMonth() + 1;
-}
-
 function valueExtremes(records, key) {
   if (!records.length) return null;
   return records.slice(1).reduce(({ highest, lowest }, record) => ({
@@ -911,7 +1098,7 @@ function recentMoneyTrend(records, key, label) {
   return `Recent ${label} is ${delta > 0 ? 'rising' : 'falling'}: ${last.month} is ${yen(Math.abs(delta))} ${delta > 0 ? 'above' : 'below'} ${first.month}.`;
 }
 
-function renderDashboardSummary({ year, salary, elapsed, elapsedMonths, projectedMonths, actualIncome, actualSavings, stockLatest, stockRecord, stockTarget }) {
+function renderDashboardSummary({ year, salary, elapsed, elapsedMonths, projectedMonths, actualIncome, actualTakeHome, actualExpenses, actualSavings, stockLatest, stockRecord, stockTarget }) {
   const summary = document.querySelector('.dashboard-summary');
   const title = document.getElementById('dashboardSummaryTitle');
   let items;
@@ -948,10 +1135,11 @@ function renderDashboardSummary({ year, salary, elapsed, elapsedMonths, projecte
       ? `${elapsedMonths} salary month${elapsedMonths === 1 ? '' : 's'} recorded${projectedMonths ? `; ${projectedMonths} future month${projectedMonths === 1 ? '' : 's'} included in projections` : ''}.`
       : `No completed salary months recorded for ${year} yet.`;
     const takeHome = actualIncome
-      ? `Take-home is ${Math.round((actualSavings / actualIncome) * 100)}% of recorded gross income.`
+      ? `Take-home is ${Math.round((actualTakeHome / actualIncome) * 100)}% of recorded gross income.`
       : 'Take-home percentage will appear once salary is recorded.';
     items = [
       `${progress} ${takeHome}`,
+      `Recorded take-home is ${yen(actualTakeHome)}; after ${yen(actualExpenses)} of expenditures, savings are ${yen(actualSavings)}.`,
       extremes
         ? `Highest monthly gross was ${yen(extremes.highest.salary)} in ${extremes.highest.month}; lowest was ${yen(extremes.lowest.salary)} in ${extremes.lowest.month}.`
         : 'Monthly highs and lows will appear once salary is recorded.',
@@ -973,8 +1161,12 @@ function renderKpis() {
   const debts = state.personalBalances;
   const actualIncome = sum(elapsed, 'salary');
   const projectedIncome = sum(salary, 'salary');
-  const actualSavings = sum(elapsed, 'actualSavings');
-  const projectedSavings = sum(salary, 'actualSavings');
+  const actualTakeHome = sum(elapsed, 'takeHome');
+  const projectedTakeHome = sum(salary, 'takeHome');
+  const yearExpenses = (state.expenses || []).filter((item) => Number(item.year) === year);
+  const elapsedExpenses = yearExpenses.filter((item) => monthHasElapsed(item, year, yearExpenses));
+  const actualExpenses = sum(elapsedExpenses, 'amount');
+  const actualSavings = calculateSavings(actualTakeHome, actualExpenses);
   const stockLatest = latestStockActualForYear(year);
   const stockRecord = latestStockRecordForYear(year);
   const stockTarget = Number(stockRecord?.targetCumulative || 0);
@@ -982,16 +1174,17 @@ function renderKpis() {
   const lenders = new Set((debts || [])
     .map((item) => String(item.group || '').trim().toLowerCase())
     .filter(Boolean)).size;
-  // Just the figure — the Help tab explains what actual and projected mean.
-  const projection = (value) => projectedMonths ? `Projected ${yen(value)}` : '';
-  // A tone per tile so the rail can be scanned at a glance. The value keeps its
-  // own green/red meaning; the tone only says which figure you are looking at.
+  const { gap: stockGap, performance: stockPerformance } = stockPerformanceTone(stockLatest, stockTarget, Boolean(stockRecord));
+  const stockToneDirection = stockRecord ? (stockGap < 0 ? 'loss' : 'gain') : 'empty';
+  const stockToneIntensity = stockRecord
+    ? Math.max(stockGap === 0 ? 0 : 1, Math.round(Math.abs(stockPerformance) * 4))
+    : 0;
   const kpis = [
-    ['Salary · Gross Income', yen(actualIncome), '', projection(projectedIncome), 'tone-blue', 'salary'],
-    ['Salary · Take-home Saved', yen(actualSavings), actualSavings >= 0 ? 'positive' : 'negative',
-      projection(projectedSavings), 'tone-green', 'salary'],
-    ['Stock · Win Total', yen(stockLatest), stockLatest >= 0 ? 'positive' : 'negative',
-      stockRecord ? `${stockRecord.month} target ${yen(stockTarget)}` : '', 'tone-amber', 'stocks'],
+    ['Salary · Income', yen(actualIncome), '', `Take-home ${yen(actualTakeHome)}${projectedMonths ? ` · projected gross ${yen(projectedIncome)} · take-home ${yen(projectedTakeHome)}` : ''}`, 'tone-blue', 'salary'],
+    ['Savings', yen(actualSavings), actualSavings >= 0 ? 'positive' : 'negative',
+      `Take-home ${yen(actualTakeHome)} − expenses ${yen(actualExpenses)}`, actualSavings >= 0 ? 'tone-green' : 'tone-red', 'expenses'],
+    ['Stock · Win Total', yen(stockLatest), '',
+      stockRecord ? `${yen(Math.abs(stockGap))} ${stockGap >= 0 ? 'above' : 'below'} ${stockRecord.month} target` : 'No result recorded', `tone-performance performance-${stockToneDirection} performance-intensity-${stockToneIntensity}`, 'stocks'],
     ['Outstanding Debt', yen(debtTotal), debtTotal > 0 ? 'debt' : '',
       debts.length ? `${debts.length} record${debts.length === 1 ? '' : 's'} · ${lenders} lender${lenders === 1 ? '' : 's'}` : '',
       'tone-red', 'balances']
@@ -999,26 +1192,26 @@ function renderKpis() {
   document.getElementById('kpis').innerHTML = kpis.map(([label, value, cls, hint, tone, view]) =>
     `<button type="button" class="kpi ${cls} ${tone}" data-view="${view}" aria-label="${escapeHtml(label)} — open ${escapeHtml(titles[view])}"><span>${label}</span><strong>${value}</strong>${hint ? `<small>${escapeHtml(hint)}</small>` : ''}</button>`
   ).join('');
-  renderDashboardSummary({ year, salary, elapsed, elapsedMonths, projectedMonths, actualIncome, actualSavings, stockLatest, stockRecord, stockTarget });
+  renderDashboardSummary({ year, salary, elapsed, elapsedMonths, projectedMonths, actualIncome, actualTakeHome, actualExpenses, actualSavings, stockLatest, stockRecord, stockTarget });
 }
 
 // Both dashboard charts share one frame — a wrapping legend, a round-number
 // y-axis and one slot per month — and draw their figures over it as lines.
-const chartInk = {
-  text: '#22313a',
-  muted: '#5b6d76',
-  grid: '#e8eff2',
-  baseline: '#b8c8cf',
-  hover: '#edf4f7',
-  bonus: '#fbf5e4',
-  upcoming: '#8a9aa2',
-  gross: '#256f8f',
-  target: '#c98500',
-  good: '#2e7d32',
-  below: '#c33f3f',
-  goodWash: 'rgba(46, 125, 50, .16)',
-  belowWash: 'rgba(195, 63, 63, .16)'
+const chartPalettes = {
+  ocean: {
+    background: '#ffffff', markerSurface: '#ffffff', text: '#22313a', muted: '#5b6d76',
+    grid: '#e8eff2', baseline: '#b8c8cf', hover: '#edf4f7', bonus: '#fbf5e4',
+    upcoming: '#8a9aa2', gross: '#256f8f', target: '#c98500', good: '#2e7d32',
+    below: '#c33f3f', goodWash: 'rgba(46, 125, 50, .16)', belowWash: 'rgba(195, 63, 63, .16)'
+  },
+  dark: {
+    background: '#131722', markerSurface: '#131722', text: '#d1d4dc', muted: '#9aa4b2',
+    grid: '#2a2e39', baseline: '#4c525e', hover: '#1e222d', bonus: '#302b22',
+    upcoming: '#8b95a5', gross: '#42a5f5', target: '#f0b53d', good: '#26a69a',
+    below: '#f07070', goodWash: 'rgba(101, 200, 121, .18)', belowWash: 'rgba(240, 112, 112, .18)'
+  }
 };
+const chartInk = { ...chartPalettes.ocean };
 const chartFont = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 // Take-home under this share of gross income is drawn red.
 const takeHomeFloor = 0.5;
@@ -1076,7 +1269,7 @@ function prepareCanvas(canvas) {
     canvas.height = pixelHeight;
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = chartInk.background;
   ctx.fillRect(0, 0, w, h);
   return { ctx, w, h };
 }
@@ -1102,10 +1295,10 @@ function drawMarker(ctx, x, y, { color, shape = 'dot', hollow = false, r = 4 }) 
   ctx.setLineDash([]);
   ctx.lineJoin = 'round';
   ctx.lineWidth = 4;
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = chartInk.markerSurface;
   path();
   ctx.stroke();
-  ctx.fillStyle = hollow ? '#ffffff' : color;
+  ctx.fillStyle = hollow ? chartInk.markerSurface : color;
   path();
   ctx.fill();
   if (hollow) {
@@ -1319,7 +1512,7 @@ function salaryChart(year) {
   const source = (state.salary || []).filter((item) => Number(item.year) === year);
   const rows = source.map((item) => {
     const gross = Number(item.salary || 0);
-    const takeHome = Number(item.actualSavings || 0);
+    const takeHome = Number(item.takeHome ?? item.actualSavings ?? 0);
     return {
       label: item.month,
       gross,
@@ -1462,7 +1655,7 @@ function stockChart(year) {
       const [labelX, labelY] = fitsRight ? [x + 10, y] : [Math.min(x, frame.plotRight - 2 - width / 2), y - 16];
       ctx.lineWidth = 4;
       ctx.lineJoin = 'round';
-      ctx.strokeStyle = '#ffffff';
+      ctx.strokeStyle = chartInk.markerSurface;
       ctx.strokeText(text, labelX, labelY);
       ctx.fillStyle = chartInk.text;
       ctx.fillText(text, labelX, labelY);
@@ -1722,7 +1915,8 @@ function renderDashboard() {
 }
 
 function formatValue(key, value) {
-  if (['salary', 'plannedSavings', 'actualSavings', 'cumulativeCapital', 'basic', 'allowance', 'overtimePay', 'transportation', 'grossTotal', 'insurance', 'pension', 'employmentInsurance', 'residentTax', 'incomeTax', 'totalDeduction', 'received', 'targetCumulative', 'actualCumulative', 'monthlyRevenue', 'surplus', 'amount', 'rate'].includes(key)) {
+  if (value === '' || value === null || value === undefined) return '\u2014';
+  if (['salary', 'takeHome', 'plannedSavings', 'expenseTotal', 'actualSavings', 'cumulativeCapital', 'basic', 'allowance', 'overtimePay', 'transportation', 'grossTotal', 'insurance', 'pension', 'employmentInsurance', 'residentTax', 'incomeTax', 'totalDeduction', 'received', 'targetCumulative', 'actualCumulative', 'monthlyRevenue', 'surplus', 'amount', 'rate'].includes(key)) {
     return yen(value);
   }
   if (key === 'savingsRate') return pct(value);
@@ -1752,15 +1946,13 @@ function cellClass(collection, key, item, type) {
 }
 
 function renderTable(containerId, collection, fields, records, options = {}) {
-  const canDelete = options.canDelete || (() => true);
-  const deleteHint = options.deleteHint || '';
+  const extraAction = options.extraAction || (() => '');
+  const actions = options.actions || ((item) => `<button data-edit="${collection}" data-id="${escapeHtml(item.id)}" aria-label="Edit record">Edit</button>${extraAction(item)}<button class="delete" data-delete="${collection}" data-id="${escapeHtml(item.id)}" aria-label="Delete record">Delete</button>`);
   const rowClass = options.rowClass || (() => '');
   const rows = records.map((item) => `
     <tr class="${rowClass(item)}" data-record-id="${escapeHtml(item.id)}" data-record-collection="${escapeHtml(collection)}">
       ${fields.map(([key, , type]) => `<td class="${cellClass(collection, key, item, type)}">${tableValue(key, item[key])}</td>`).join('')}
-      <td><div class="row-actions"><button data-edit="${collection}" data-id="${escapeHtml(item.id)}" aria-label="Edit record">Edit</button>${canDelete(item)
-        ? `<button class="delete" data-delete="${collection}" data-id="${escapeHtml(item.id)}" aria-label="Delete record">Delete</button>`
-        : `<button class="delete" type="button" disabled title="${escapeHtml(deleteHint)}" aria-label="Delete record">Delete</button>`}</div></td>
+      <td><div class="row-actions">${actions(item)}</div></td>
     </tr>
   `).join('');
   const html = `
@@ -1775,25 +1967,78 @@ function renderTable(containerId, collection, fields, records, options = {}) {
   document.getElementById(containerId).innerHTML = html;
 }
 
+const payslipColumns = schemas.monthlyDetails
+  .filter(([key]) => !['year', 'month', 'grossTotal', 'received'].includes(key));
+const salaryColumns = [...schemas.salary, ...payslipColumns];
+
+function monthKey(record) {
+  return `${Number(record.year)}-${normalizeMonth(record.month)}`;
+}
+
+function payslipFor(record) {
+  return (state.monthlyDetails || []).find((item) => monthKey(item) === monthKey(record));
+}
+
 function renderSalary() {
-  const salaryRecords = state.salary || [];
+  const salaryRecords = buildSalaryLedger(state.salary || [], state.expenses || []);
   const years = yearsFrom(salaryRecords);
   const selected = document.getElementById('salaryYearFilter').value || years[years.length - 1] || '';
   fillSelect('salaryYearFilter', selectableYears(salaryRecords), selected, 'All years');
-  const records = sortRecordsByMonth(selected ? salaryRecords.filter((item) => String(item.year) === String(selected)) : salaryRecords);
-  renderTable('salaryTable', 'salary', schemas.salary, records, {
+  const details = new Map((state.monthlyDetails || []).map((item) => [monthKey(item), item]));
+  const records = sortRecordsByMonth(selected
+    ? salaryRecords.filter((item) => String(item.year) === String(selected))
+    : salaryRecords)
+    .map((item) => {
+      const detail = details.get(monthKey(item));
+      const payslip = {};
+      payslipColumns.forEach(([key]) => { payslip[key] = detail ? detail[key] : ''; });
+      return { ...item, ...payslip, hasPayslip: Boolean(detail) };
+    });
+  renderTable('salaryTable', 'salary', salaryColumns, records, {
     rowClass: (item) => monthHasElapsed(item, item.year, records) ? '' : 'row-projected',
-    canDelete: (item) => !item.derivedFromDetail,
-    deleteHint: 'This row is generated from Salary Details. Delete the matching salary detail instead.'
+    actions: (item) => item.derivedFromExpenses
+      ? '<span class="muted">Calculated</span>'
+      : `<button data-edit="salary" data-id="${escapeHtml(item.id)}" aria-label="Edit record">Edit</button><button data-payslip="${escapeHtml(item.id)}" aria-label="${item.hasPayslip ? 'Edit payslip' : 'Add payslip'}">${item.hasPayslip ? 'Payslip' : 'Add payslip'}</button><button class="delete" data-delete="salary" data-id="${escapeHtml(item.id)}" aria-label="Delete record">Delete</button>`
   });
+  const table = document.querySelector('#salaryTable table');
+  const yearCell = table && table.querySelector('thead th');
+  if (yearCell) table.style.setProperty('--sticky-month-left', `${yearCell.getBoundingClientRect().width}px`);
 }
 
-function renderDetails() {
-  const years = yearsFrom(state.monthlyDetails);
-  const selected = document.getElementById('detailsYearFilter').value || years[years.length - 1] || '';
-  fillSelect('detailsYearFilter', selectableYears(state.monthlyDetails), selected, 'All years');
-  const records = sortRecordsByMonth(selected ? state.monthlyDetails.filter((item) => String(item.year) === String(selected)) : state.monthlyDetails);
-  renderTable('detailsTable', 'monthlyDetails', schemas.monthlyDetails, records);
+function openPayslipFor(salaryId) {
+  const row = (state.salary || []).find((item) => item.id === salaryId);
+  if (!row) return;
+  openEditor('monthlyDetails', payslipFor(row) || { year: row.year, month: normalizeMonth(row.month) });
+}
+
+function deleteSalaryMonth(recordId) {
+  const row = (state.salary || []).find((item) => item.id === recordId);
+  if (!row) return;
+  const detail = payslipFor(row);
+  const question = detail
+    ? `Delete ${normalizeMonth(row.month)} ${row.year}? Its payslip goes with it.`
+    : 'Delete this record?';
+  if (!confirm(question)) return;
+  state.salary = state.salary.filter((item) => item.id !== recordId);
+  if (detail) state.monthlyDetails = state.monthlyDetails.filter((item) => item.id !== detail.id);
+  render();
+  save();
+}
+
+function renderExpenses() {
+  const year = selectedExpenseYear();
+  const month = selectedExpenseMonth();
+  fillSelect('expenseYearFilter', selectableYears(state.expenses), year);
+  fillSelectPairs('expenseMonthFilter', [['', 'All months'], ...monthOptions], month);
+  const yearRecords = (state.expenses || []).filter((item) => Number(item.year) === Number(year));
+  const records = yearRecords
+    .filter((item) => !month || normalizeMonth(item.month) === month)
+    .sort((a, b) => monthIndex(a.month) - monthIndex(b.month) || Number(a.day || 0) - Number(b.day || 0));
+  document.getElementById('expenseSummary').innerHTML = `
+    <div><span>${month ? `${escapeHtml(month)} total` : 'Selected total'}</span><strong>${yen(sum(records, 'amount'))}</strong></div>
+    <div><span>${year} annual total</span><strong>${yen(sum(yearRecords, 'amount'))}</strong></div>
+    <div><span>Expense items</span><strong>${records.length}</strong></div>`;
+  renderTable('expenseTable', 'expenses', schemas.expenses, records);
 }
 
 function renderOvertime() {
@@ -2107,16 +2352,17 @@ function normalizeState() {
   state.overtime = (state.overtime || []).map(normalizeOvertimeRecord);
   state.daily = (state.daily || []).map(normalizeDailyRecord);
   state.monthlyDetails = (state.monthlyDetails || []).map(normalizeMonthlyDetail);
+  state.expenses = (state.expenses || []).map(normalizeExpenseRecord);
   state.salary = derivedSalaryRecords();
 }
 
 const viewRenderers = {
   dashboard: renderDashboard,
   salary: renderSalary,
-  details: renderDetails,
   overtime: renderOvertime,
   stocks: renderStocks,
   daily: renderDaily,
+  expenses: renderExpenses,
   balances: () => {
     renderBalances();
     renderUnpaidBills();
@@ -2186,7 +2432,7 @@ function openEditor(collection, record) {
     return `
     <div class="field ${key === 'note' ? 'full' : ''}">
       <label for="field-${key}">${escapeHtml(label)}${isComputed ? ' <span class="field-computed">calculated</span>' : ''}</label>
-      <input id="field-${key}" name="${key}" type="${type === 'number' ? 'number' : 'text'}" step="any"${isComputed ? ' readonly tabindex="-1" title="Calculated from the other fields when you save."' : ''} value="${record && record[key] !== undefined ? escapeHtml(record[key]) : ''}">
+      <input id="field-${key}" name="${key}" type="${type === 'number' ? 'number' : type === 'date' ? 'date' : 'text'}" step="any"${isComputed ? ' readonly tabindex="-1" title="Calculated from the other fields when you save."' : ''} value="${record && record[key] !== undefined ? escapeHtml(record[key]) : ''}">
     </div>
   `;
   }).join('');
@@ -2211,6 +2457,11 @@ function saveDialogRecord() {
     if (calculatedOtPay > 0) values.overtimePay = calculatedOtPay;
     Object.assign(values, monthlyPayroll(values, Number(values.overtimePay || 0)));
   }
+  if (collection === 'salary') {
+    values.month = normalizeMonth(values.month);
+    values.takeHome = Number(values.takeHome ?? values.actualSavings ?? 0);
+  }
+  if (collection === 'expenses') Object.assign(values, normalizeExpenseRecord(values));
   if (recordId) {
     state[collection] = state[collection].map((item) => item.id === recordId ? values : item);
   } else {
@@ -2221,6 +2472,10 @@ function saveDialogRecord() {
 }
 
 function deleteRecord(collection, recordId) {
+  if (collection === 'salary') {
+    deleteSalaryMonth(recordId);
+    return;
+  }
   if (!confirm('Delete this record?')) return;
   state[collection] = state[collection].filter((item) => item.id !== recordId);
   render();
@@ -2255,6 +2510,7 @@ async function importBackupWithConfirmation() {
     if (!imported) return;
     state = normalizeLoadedData(imported);
     render();
+    await save();
     setSaveState('Backup imported');
   } catch (error) {
     console.error(error);
@@ -2476,16 +2732,15 @@ async function buildDemoData() {
     note: ''
   }));
   const salary = monthlyDetails.map((detail, index) => {
-    const dailyTotal = sum(daily.filter((item) => item.month === detail.month), 'amount');
-    const actualSavings = detail.received - Math.max(0, dailyTotal);
     return {
       id: id('salary'),
       year,
       month: detail.month,
-      salary: detail.received,
+      salary: detail.grossTotal,
+      takeHome: detail.received,
       plannedSavings: 120000,
-      actualSavings,
-      cumulativeCapital: actualSavings + index * 115000
+      actualSavings: detail.received,
+      cumulativeCapital: detail.received + index * 115000
     };
   });
   const stockRevenue = monthOptions.map(([month], index) => {
@@ -2520,6 +2775,7 @@ async function buildDemoData() {
     overtime,
     stockRevenue,
     daily,
+    expenses: [],
     personalBalances: [
       { id: id('balance'), group: 'Utility bill', dateOrLabel: '2026-07-31', amount: 18500, note: 'Demo unpaid bill' },
       { id: id('balance'), group: 'Credit card', dateOrLabel: '2026-08-10', amount: 42000, note: 'Demo balance' }
@@ -2545,6 +2801,7 @@ function emptyData() {
     overtime: [],
     stockRevenue: [],
     daily: [],
+    expenses: [],
     personalBalances: [],
     salarySheets: [],
     unpaidBills: []
@@ -2553,15 +2810,11 @@ function emptyData() {
 
 
 function normalizeLoadedData(data) {
-  const next = rehydrateArchives({ ...emptyData(), ...(data || {}) });
-  next.meta = { ...emptyData().meta, ...(data?.meta || {}) };
-  [...collections, 'salarySheets', 'unpaidBills'].forEach((collection) => {
-    const records = Array.isArray(next[collection]) ? next[collection] : [];
-    next[collection] = records
-      .filter((record) => record && typeof record === 'object' && !Array.isArray(record))
-      .map((record) => (record.id ? record : { ...record, id: id(collection) }));
+  return migrateLoadedData(rehydrateArchives(data), {
+    empty: emptyData(),
+    collections: [...collections, 'salarySheets', 'unpaidBills'],
+    makeId: id
   });
-  return next;
 }
 
 // Backups written by the desktop app keep file bytes in `_archives` instead of an
@@ -2617,8 +2870,12 @@ function looksLikeBackup(data) {
 
 async function loadDemoData() {
   if (!confirm('Load demo data? This replaces current records. Export a backup first if you need to keep current data.')) return;
-  await window.financeApi.clearAll();
+  const localArchives = accountUser
+    ? { salarySheets: state.salarySheets || [], unpaidBills: state.unpaidBills || [] }
+    : null;
+  if (!accountUser) await window.financeApi.clearAll();
   state = await buildDemoData();
+  if (localArchives) Object.assign(state, localArchives);
   render();
   await save();
   setSaveState('Demo loaded');
@@ -2626,8 +2883,22 @@ async function loadDemoData() {
 
 async function clearAllData() {
   if (!confirm('Before clearing all data, export a backup and keep it somewhere safe. Continue only if you are sure.')) return;
-  if (!confirm('This will delete all app records and archived salary/bill files from this app data folder. Continue?')) return;
-  state = await window.financeApi.clearAll();
+  const warning = accountUser
+    ? 'This will delete the signed-in account’s synced financial records. Files archived on this Mac and the separate local-mode records will remain. Continue?'
+    : 'This will delete all local app records and archived salary/bill files from this app data folder. Continue?';
+  if (!confirm(warning)) return;
+  if (accountUser) {
+    const salarySheets = state.salarySheets || [];
+    const unpaidBills = state.unpaidBills || [];
+    state = emptyData();
+    state.salarySheets = salarySheets;
+    state.unpaidBills = unpaidBills;
+    state.meta.startedAt = new Date().toISOString();
+    state.meta.dataPath = cloudDataPath();
+    await save();
+  } else {
+    state = await window.financeApi.clearAll();
+  }
   state.salarySheets = state.salarySheets || [];
   state.unpaidBills = state.unpaidBills || [];
   render();
@@ -2764,6 +3035,8 @@ function bindEvents() {
     if (deleteBill) deleteUnpaidBill(deleteBill.dataset.deleteUnpaidBill);
     const add = event.target.closest('[data-add]');
     if (add) openEditor(add.dataset.add, null);
+    const payslip = event.target.closest('[data-payslip]');
+    if (payslip) openPayslipFor(payslip.dataset.payslip);
     const edit = event.target.closest('[data-edit]');
     if (edit) {
       const item = state[edit.dataset.edit].find((record) => record.id === edit.dataset.id);
@@ -2772,8 +3045,12 @@ function bindEvents() {
     const del = event.target.closest('[data-delete]');
     if (del) deleteRecord(del.dataset.delete, del.dataset.id);
   });
-  ['dashboardYear', 'salaryYearFilter', 'detailsYearFilter', 'stockYearFilter', 'dailyYearFilter', 'dailyMonthFilter', 'otYearFilter', 'otMonthFilter'].forEach((idName) => {
-    document.getElementById(idName).addEventListener('change', render);
+  ['dashboardYear', 'salaryYearFilter', 'expenseYearFilter', 'expenseMonthFilter', 'stockYearFilter', 'dailyYearFilter', 'dailyMonthFilter', 'otYearFilter', 'otMonthFilter'].forEach((idName) => {
+    on(idName, 'change', render);
+  });
+  on('themeButton', 'click', () => {
+    const current = document.documentElement.dataset.theme || preferredTheme();
+    applyTheme(themeOrder[(themeOrder.indexOf(current) + 1) % themeOrder.length]);
   });
   document.body.addEventListener('input', (event) => {
     const dailyInput = event.target.closest('.daily-cell-input');
@@ -2861,9 +3138,27 @@ function bindEvents() {
   on('dataExportBackup', 'click', exportBackupData);
   on('setupLoadDemoData', 'click', loadDemoData);
   document.getElementById('startBlank').addEventListener('click', async () => {
-    state = await window.financeApi.startBlank();
+    state = accountUser ? emptyData() : await window.financeApi.startBlank();
+    if (accountUser) {
+      state.meta.startedAt = new Date().toISOString();
+      state.meta.dataPath = cloudDataPath();
+      await save();
+    }
     render();
     setSaveState('Started');
+  });
+  on('accountSignIn', 'click', beginGoogleSignIn);
+  on('setupSignIn', 'click', beginGoogleSignIn);
+  on('accountSyncNow', 'click', syncAccountNow);
+  on('accountSignOut', 'click', async () => {
+    setSaveState('Signing out...');
+    try {
+      const { signOutAccount } = await firebaseClient();
+      await signOutAccount();
+    } catch (error) {
+      console.error(error);
+      setSaveState('Sign out failed');
+    }
   });
   on('dataExportExcel', 'click', exportRecords);
   on('loadDemoData', 'click', loadDemoData);
@@ -2907,9 +3202,16 @@ function bindEvents() {
     saveDialogRecord();
     document.getElementById('recordDialog').close();
   });
+  window.addEventListener('online', () => {
+    if (cloudSyncEnabled && state.meta?.cloudPending) syncAccountNow();
+  });
+  window.addEventListener('offline', () => {
+    if (cloudSyncEnabled) updateAccountUI('Offline · changes stay on this Mac');
+  });
 }
 
 async function init() {
+  applyTheme(preferredTheme(), false);
   try {
     state = normalizeLoadedData(await window.financeApi.load());
   } catch (error) {
@@ -2919,9 +3221,21 @@ async function init() {
   }
   updateSaveButton();
   bindEvents();
+  updateAccountUI();
   switchView('dashboard');
   if (document.getElementById('saveState').textContent === 'Loading...') {
     setSaveState('Ready');
+  }
+  try {
+    const { initializeAccountSession } = await firebaseClient();
+    await initializeAccountSession((user) => {
+      if (user) activateAccount(user);
+      else if (accountUser) activateLocalMode();
+      else updateAccountUI();
+    });
+  } catch (error) {
+    console.error(error);
+    updateAccountUI('Account service unavailable · local mode');
   }
 }
 

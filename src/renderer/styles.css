@@ -12,8 +12,30 @@
   --yellow: #fff2c6;
   --bg: #eaf3f7;
   --panel: #fbfeff;
+  --panel-blue: #eef7fb;
+  --panel-mint: #eef8f4;
   --shadow: 0 18px 46px rgba(35, 70, 88, .09);
   color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --ink: #e7f1f4;
+  --muted: #a8bbc3;
+  --line: #314b56;
+  --control-line: #66808b;
+  --focus: #69c5e8;
+  --blue: #5bb7dc;
+  --teal: #57bba3;
+  --green: #65c879;
+  --red: #f07070;
+  --amber: #f0b53d;
+  --yellow: #43391d;
+  --bg: #10232c;
+  --panel: #172d37;
+  --panel-blue: #1b3540;
+  --panel-mint: #19362f;
+  --shadow: 0 18px 46px rgba(0, 0, 0, .28);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -43,6 +65,13 @@ body {
     radial-gradient(circle at 100% 100%, rgba(55, 149, 115, .13), transparent 30%),
     linear-gradient(155deg, #f3f9fb 0%, var(--bg) 52%, #e8f4f1 100%);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(45, 139, 174, .18), transparent 34%),
+    radial-gradient(circle at 100% 100%, rgba(55, 149, 115, .12), transparent 30%),
+    linear-gradient(155deg, #0c1c23 0%, var(--bg) 52%, #102820 100%);
 }
 
 :where(h1, h2, h3) {
@@ -128,7 +157,10 @@ select:focus-visible {
 .sidebar {
   position: sticky;
   top: 0;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: linear-gradient(180deg, rgba(229, 243, 248, .96), rgba(237, 248, 244, .94));
   backdrop-filter: blur(18px);
   border-right: 1px solid var(--line);
@@ -267,6 +299,23 @@ nav button:not(.active):hover {
   gap: 10px;
   align-items: center;
 }
+
+.theme-switch { padding: 0; border: 0; background: none; line-height: 0; }
+.theme-switch-track {
+  position: relative; display: grid; grid-template-columns: 1fr 1fr; align-items: center;
+  width: 72px; height: 34px; padding: 3px; border: 1px solid var(--line);
+  border-radius: 999px; background: var(--panel); box-shadow: inset 0 1px 3px rgba(35, 70, 88, .08);
+}
+.theme-switch-thumb {
+  position: absolute; top: 3px; left: 3px; width: 32px; height: 26px; border-radius: 999px;
+  background: var(--panel-blue); box-shadow: 0 1px 3px rgba(35, 70, 88, .18); transition: transform .18s ease;
+}
+.theme-switch[aria-checked="true"] .theme-switch-thumb { transform: translateX(34px); }
+.theme-switch-face { position: relative; display: grid; place-items: center; color: var(--muted); }
+.theme-switch[aria-checked="false"] .theme-switch-face-ocean,
+.theme-switch[aria-checked="true"] .theme-switch-face-dark { color: var(--blue); }
+.theme-switch-face svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.theme-switch:hover .theme-switch-track { border-color: var(--control-line); }
 
 .search-shell {
   position: relative;
@@ -484,6 +533,25 @@ nav button:not(.active):hover {
   border-color: #e6c1c1;
 }
 
+.kpi.tone-performance {
+  --tone: hsl(var(--kpi-hue) 72% 38%);
+  background: linear-gradient(135deg,
+    hsl(var(--kpi-hue) 78% 48% / var(--kpi-wash-strong)),
+    hsl(var(--kpi-hue) 68% 58% / var(--kpi-wash-soft)) 56%,
+    hsl(var(--kpi-hue) 64% 48% / var(--kpi-wash-soft))), var(--panel);
+  border-color: hsl(var(--kpi-hue) 58% 44% / var(--kpi-border-alpha));
+}
+.kpi.tone-performance span,
+.kpi.tone-performance strong { color: hsl(var(--kpi-hue) 72% 27%); }
+.kpi.performance-loss { --kpi-hue: 0; }
+.kpi.performance-gain { --kpi-hue: 125; }
+.kpi.performance-empty { --kpi-hue: 205; }
+.kpi.performance-intensity-0 { --kpi-wash-strong: .18; --kpi-wash-soft: .08; --kpi-border-alpha: .44; }
+.kpi.performance-intensity-1 { --kpi-wash-strong: .24; --kpi-wash-soft: .11; --kpi-border-alpha: .50; }
+.kpi.performance-intensity-2 { --kpi-wash-strong: .32; --kpi-wash-soft: .15; --kpi-border-alpha: .57; }
+.kpi.performance-intensity-3 { --kpi-wash-strong: .40; --kpi-wash-soft: .19; --kpi-border-alpha: .65; }
+.kpi.performance-intensity-4 { --kpi-wash-strong: .48; --kpi-wash-soft: .23; --kpi-border-alpha: .73; }
+
 .kpi.tone-red::after { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%23c33f3f%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M6%203.5h12v17l-3-1.8-3%201.8-3-1.8-3%201.8z%27%2F%3E%3Cpath%20d%3D%27M9.5%209h5M9.5%2013h5%27%2F%3E%3C%2Fsvg%3E"); }
 
 .kpi.tone-amber::after,
@@ -547,6 +615,31 @@ button.kpi:focus-visible {
   color: white;
   border-color: var(--blue);
 }
+
+.account-card {
+  margin-top: auto;
+  display: grid;
+  gap: 9px;
+  padding: 13px;
+  border: 1px solid #b9d8e2;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, .78), rgba(222, 242, 241, .82));
+  box-shadow: 0 6px 18px rgba(35, 70, 88, .08);
+}
+.account-card > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.account-card strong,
+.account-card span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-card strong { color: #174f68; font-size: 14px; }
+.account-card span { color: var(--muted); font-size: 11px; }
+.account-card button { width: 100%; padding: 9px 11px; font-size: 12px; font-weight: 750; }
+.google-sign-in { background: var(--blue); border-color: var(--blue); color: #fff; }
+#accountSyncNow { background: #176b59; border-color: #176b59; color: #fff; }
+#accountSignOut { background: #fff7f7; border-color: #d9a7a7; color: #9f3030; }
+
+.expense-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.expense-summary > div { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid #bdd7e0; border-radius: 12px; background: linear-gradient(145deg, #e9f6fa, #f5fbf9); }
+.expense-summary span { color: var(--muted); font-size: 12px; font-weight: 700; }
+.expense-summary strong { color: #205e78; font-size: 18px; }
 
 select, input {
   border: 1px solid var(--control-line);
@@ -620,6 +713,12 @@ td.number { text-align: right; font-variant-numeric: tabular-nums; }
   letter-spacing: .04em;
   color: var(--muted);
 }
+
+#salaryTable :is(th, td):nth-child(-n + 2) { position: sticky; z-index: 1; }
+#salaryTable td:nth-child(-n + 2) { background: var(--panel); }
+#salaryTable :is(th, td):first-child { left: 0; }
+#salaryTable :is(th, td):nth-child(2) { left: var(--sticky-month-left, 90px); box-shadow: 1px 0 0 var(--line); }
+#salaryTable th:nth-child(-n + 2) { z-index: 2; }
 
 .empty-cell {
   text-align: center;
@@ -729,6 +828,91 @@ canvas {
   width: 100%;
   height: 460px;
   display: block;
+}
+
+/* Dark mode keeps the charts TradingView-dark and gives every data surface a
+   deliberate high-contrast treatment instead of merely inverting text. */
+:root[data-theme="dark"] :is(.sidebar, .topbar) {
+  background: linear-gradient(145deg, #112d37, #12352e);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] :is(.topbar h2, .panel-head h3, th, .stock-month-cell, .daily-month-cell, .daily-annual-label) { color: #c3e9f5; }
+:root[data-theme="dark"] :is(.panel, .table-wrap, .search-results, dialog, dialog header, dialog footer, .salary-sheet-drop, .setup-card) {
+  background: var(--panel);
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] nav button { background: #183540; border-color: #355660; color: #d7e7ec; }
+:root[data-theme="dark"] nav button.active { background: linear-gradient(90deg, #235163, #245247); border-color: #4d8495; color: #dff7ff; }
+:root[data-theme="dark"] nav button:not(.active):hover { background: #244652; color: #d9f1f8; }
+:root[data-theme="dark"] :is(select, input, textarea, button) { color: var(--ink); border-color: var(--control-line); }
+:root[data-theme="dark"] :is(select, input, textarea) { background: #132a34; }
+:root[data-theme="dark"] ::placeholder { color: #91a5ae; opacity: 1; }
+:root[data-theme="dark"] th,
+:root[data-theme="dark"] .daily-grid thead th,
+:root[data-theme="dark"] .stock-month-cell,
+:root[data-theme="dark"] .daily-month-cell { background: #1d3b46; color: #c3e9f5; }
+:root[data-theme="dark"] td { background: var(--panel); color: var(--ink); }
+:root[data-theme="dark"] tr:hover td { background: #1d3b45; }
+:root[data-theme="dark"] :is(.calculated-cell, .row-projected td, .daily-grid tfoot th, .daily-grid tfoot td) { background-color: #172b34; }
+:root[data-theme="dark"] #salaryTable td:nth-child(-n + 2) { background: var(--panel); }
+:root[data-theme="dark"] .row-projected td,
+:root[data-theme="dark"] #salaryTable .row-projected td:nth-child(-n + 2) {
+  background: repeating-linear-gradient(135deg, #182e38 0, #182e38 6px, #1c3540 6px, #1c3540 12px);
+}
+:root[data-theme="dark"] .grid-input { background: #132a34; color: var(--ink); }
+:root[data-theme="dark"] .grid-input:hover,
+:root[data-theme="dark"] .grid-input:focus { background: #193743; }
+:root[data-theme="dark"] .daily-plus { color: #8ae49a; background: #19382a; border-color: #3c6f4c; }
+:root[data-theme="dark"] .daily-minus { color: #ff9696; background: #402527; border-color: #784349; }
+:root[data-theme="dark"] .daily-zero { color: #a8bbc3; background: #172d37; }
+:root[data-theme="dark"] .daily-grid td.daily-total-cell.daily-plus { color: #8ae49a; background: #19382a; }
+:root[data-theme="dark"] .daily-grid td.daily-total-cell.daily-minus { color: #ff9696; background: #402527; }
+:root[data-theme="dark"] .daily-grid td.daily-total-cell.daily-zero { color: #a8bbc3; background: var(--panel); }
+:root[data-theme="dark"] .daily-grid tfoot td.daily-annual-total { background: #172d37; }
+:root[data-theme="dark"] .daily-status { color: #ffd48a; background: #3d3422; border-color: #766039; }
+:root[data-theme="dark"] .stock-pass { color: #8ae49a; }
+:root[data-theme="dark"] .stock-fail { color: #ff9696; }
+:root[data-theme="dark"] .expense-summary > div { background: linear-gradient(145deg, #183843, #19362f); border-color: #426a76; }
+:root[data-theme="dark"] .expense-summary strong { color: #b9e2f0; }
+:root[data-theme="dark"] .kpi.tone-blue { background: linear-gradient(135deg, #173b4a, #1b3440); border-color: #397186; }
+:root[data-theme="dark"] .kpi.tone-green { background: linear-gradient(135deg, #1a3c28, #1b352b); border-color: #477b54; }
+:root[data-theme="dark"] .kpi.tone-red { background: linear-gradient(135deg, #452627, #35272b); border-color: #875253; }
+:root[data-theme="dark"] .kpi.tone-blue span { color: #78c7e6; }
+:root[data-theme="dark"] .kpi.tone-green span { color: #84d591; }
+:root[data-theme="dark"] .kpi.tone-red span { color: #ff9696; }
+:root[data-theme="dark"] .kpi.tone-performance {
+  background: linear-gradient(135deg,
+    hsl(var(--kpi-hue) 55% 43% / var(--kpi-wash-strong)),
+    hsl(var(--kpi-hue) 45% 31% / var(--kpi-wash-soft))), #192d35;
+}
+:root[data-theme="dark"] .kpi.tone-performance span,
+:root[data-theme="dark"] .kpi.tone-performance strong { color: hsl(var(--kpi-hue) 58% 70%); }
+:root[data-theme="dark"] :is(.chart-tabs, .chart-panel) { background: #131722; border-color: #2a2e39; }
+:root[data-theme="dark"] .chart-tablist button { background: transparent; color: #8f9aa8; }
+:root[data-theme="dark"] .chart-tablist button[aria-selected="true"] { background: #1e222d; color: #d1d4dc; }
+:root[data-theme="dark"] .chart-zoom button { background: #1e222d; border-color: #434957; color: #d1d4dc; }
+:root[data-theme="dark"] .chart-zoom button:disabled { background: #20242e; color: #68717f; opacity: .62; }
+:root[data-theme="dark"] .chart-tooltip { background: #1e222d; border-color: #434957; color: #d1d4dc; box-shadow: 0 12px 32px rgba(0, 0, 0, .42); }
+:root[data-theme="dark"] .dashboard-summary,
+:root[data-theme="dark"] .dashboard-summary[data-focus="salary"],
+:root[data-theme="dark"] .dashboard-summary[data-focus="stock"] { background: linear-gradient(145deg, #183843, #19362f); border-color: #426a76; }
+:root[data-theme="dark"] .dashboard-summary h3 { color: #d6e9ef; }
+:root[data-theme="dark"] .dashboard-summary li { color: #b7cad2; }
+:root[data-theme="dark"] .salary-sheet-item { background: #17303a; border-color: #3d5964; }
+:root[data-theme="dark"] .salary-sheet-item strong { color: #e3f0f4; }
+:root[data-theme="dark"] .salary-sheet-item span { color: #a8bbc3; }
+:root[data-theme="dark"] .account-card strong { color: #c3e9f5; }
+:root[data-theme="dark"] #accountSyncNow { background: #267b67; border-color: #4ca68e; color: #fff; }
+:root[data-theme="dark"] #accountSignOut { background: #3b2529; border-color: #8b4b53; color: #ffb1b1; }
+:root[data-theme="dark"] .row-actions [data-edit] { background: #1f4350; border-color: #4e7582; }
+:root[data-theme="dark"] .row-actions [data-payslip] { background: #25443a; border-color: #55796b; }
+:root[data-theme="dark"] .row-actions .delete { background: #422729; border-color: #7a494b; color: #ffabab; }
+:root[data-theme="dark"] .dialog-fields input[readonly] { background: #20313a; color: var(--muted); }
+:root[data-theme="dark"] .preview-body { background: #101820; }
+
+@media (max-width: 640px) {
+  .expense-summary { grid-template-columns: 1fr; }
 }
 
 #dashboard.view.active {
@@ -1853,4 +2037,51 @@ canvas {
 @media (max-width: 640px) {
   .help-list { grid-template-columns: 1fr; gap: 2px 0; }
   .help-list dd { margin-bottom: 10px; }
+}
+
+/* These components are declared late in this stylesheet, so their dark-mode
+   overrides live after them to prevent the light fills winning the cascade. */
+:root[data-theme="dark"] .help-panel h3 { color: #9edcf1; }
+:root[data-theme="dark"] .help-note {
+  color: #c5d5db;
+  background: #183743;
+  border-left-color: #5bb7dc;
+}
+:root[data-theme="dark"] .help-warn {
+  color: #ffd0d0;
+  background: #402527;
+  border-left-color: #f07070;
+}
+:root[data-theme="dark"] :is(.daily-grid-wrap, .stock-grid-wrap) { background: var(--panel); }
+:root[data-theme="dark"] .daily-grid td.daily-day-cell {
+  background: #172d37;
+  border-color: #3b5661;
+}
+:root[data-theme="dark"] .daily-grid td.daily-day-cell.has-records { background: #183744; }
+:root[data-theme="dark"] .daily-grid td.daily-day-cell.invalid-day {
+  background-color: #13262f;
+  border-color: #29434e;
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(125, 151, 162, .07) 0,
+    rgba(125, 151, 162, .07) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+:root[data-theme="dark"] .daily-day-cell:hover:not(.invalid-day) { background: #214553; }
+:root[data-theme="dark"] .daily-day-cell:hover:not(.invalid-day) .daily-cell-input,
+:root[data-theme="dark"] .daily-cell-input:focus { background: #1d3f4c; border-color: #557581; }
+:root[data-theme="dark"] .salary-sheet-item { background: #17303a; border-color: #3d5964; }
+:root[data-theme="dark"] .salary-sheet-item strong { color: #e3f0f4; }
+:root[data-theme="dark"] .salary-sheet-item span { color: #a8bbc3; }
+:root[data-theme="dark"] .archive-count { background: #203d48; color: #bfd2d9; }
+:root[data-theme="dark"] .account-card {
+  background: linear-gradient(145deg, #193743, #19362f);
+  border-color: #426a76;
+}
+:root[data-theme="dark"] :is(.danger-button, #clearAllData) {
+  background: #3b2529 !important;
+  border-color: #8b4b53 !important;
+  color: #ffb1b1 !important;
 }

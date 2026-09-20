@@ -5,7 +5,7 @@
   "author": "Maheshwor Bhurtel",
   "main": "src/main.js",
   "scripts": {
-    "test": "node tests/search.test.mjs",
+    "test": "ELECTRON_RUN_AS_NODE=1 electron --test tests/search.test.mjs tests/cloud-fields.test.mjs tests/cloud-sync-plan.test.mjs tests/finance-calendar.test.mjs tests/finance-metrics.test.mjs tests/salary-ledger.test.mjs tests/backup-migration.test.mjs",
     "start": "electron .",
     "dev": "electron .",
     "publish:preview": "electron . --publish-preview",
@@ -54,6 +54,7 @@
     }
   },
   "dependencies": {
+    "firebase": "^12.19.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

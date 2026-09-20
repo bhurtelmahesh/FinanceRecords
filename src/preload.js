@@ -3,6 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('financeApi', {
   load: () => ipcRenderer.invoke('data:load'),
   save: (data) => ipcRenderer.invoke('data:save', data),
+  loadAccount: (uid) => ipcRenderer.invoke('account:load', uid),
+  saveAccount: (uid, data) => ipcRenderer.invoke('account:save', uid, data),
   startBlank: () => ipcRenderer.invoke('data:startBlank'),
   clearAll: () => ipcRenderer.invoke('data:clearAll'),
   importExcel: () => ipcRenderer.invoke('data:importExcel'),
