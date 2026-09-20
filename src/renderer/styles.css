@@ -294,6 +294,13 @@ nav button:not(.active):hover {
   box-shadow: 0 8px 28px rgba(41, 78, 96, .08);
 }
 
+/* The title takes up the slack so search and the theme switch finish as one
+   group on the right, in that reading order. */
+.topbar { gap: 14px; }
+.topbar > div:first-child { flex: 1 1 auto; min-width: 0; }
+.topbar .top-actions { order: 1; }
+.topbar .theme-switch { order: 2; }
+
 .top-actions {
   display: flex;
   gap: 10px;
@@ -871,6 +878,16 @@ canvas {
 :root[data-theme="dark"] .daily-grid td.daily-total-cell.daily-zero { color: #a8bbc3; background: var(--panel); }
 :root[data-theme="dark"] .daily-grid tfoot td.daily-annual-total { background: #172d37; }
 :root[data-theme="dark"] .daily-status { color: #ffd48a; background: #3d3422; border-color: #766039; }
+/* A calculated cell earns a band of its own in the dark theme: pass or fail
+   reads from across the table, before any figure is read. */
+:root[data-theme="dark"] .calculated-cell.amount-plus {
+  color: #8ae49a;
+  background: #19382a;
+}
+:root[data-theme="dark"] .calculated-cell.amount-minus {
+  color: #ff9696;
+  background: #402527;
+}
 :root[data-theme="dark"] .stock-pass { color: #8ae49a; }
 :root[data-theme="dark"] .stock-fail { color: #ff9696; }
 :root[data-theme="dark"] .expense-summary > div { background: linear-gradient(145deg, #183843, #19362f); border-color: #426a76; }
@@ -2016,6 +2033,26 @@ canvas {
   margin: 0;
   color: var(--muted);
   line-height: 1.55;
+}
+
+/* The one thing on the Help page that takes you somewhere else, so it looks
+   like a control rather than another line of prose. */
+.web-app-link {
+  padding: 10px 16px;
+  border: 1px solid var(--blue);
+  border-radius: 999px;
+  background: var(--blue);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.web-app-link:hover { filter: brightness(.94); }
+
+:root[data-theme="dark"] .web-app-link {
+  border-color: #2f7f9e;
+  background: #1c5f78;
+  color: #eaf6fa;
 }
 
 .help-note {

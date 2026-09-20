@@ -99,7 +99,7 @@
             <div id="globalSearchResultsContent"></div>
           </section>
         </div>
-        <span id="saveState" role="status" aria-live="polite">Loading...</span>
+        <span id="saveState" class="sr-only" role="status" aria-live="polite">Loading...</span>
         <button id="saveNow" hidden>Save</button>
       </div>
     </header>
@@ -313,8 +313,8 @@
 
         <section class="panel help-panel">
           <h3>Income tax estimate</h3>
-          <p>Used only when Income Tax is left blank. It annualises Basic + Allowance + Overtime (Transportation is excluded, as commuting allowance is not taxable), subtracts the employment-income deduction, then social insurance and the basic deduction, applies the income tax brackets with the 2.1% surtax, and divides by twelve.</p>
-          <p class="help-warn">Treat this as a rough guide. It uses the post-2025 figures throughout &mdash; a 650,000 employment-income deduction floor and a 580,000 basic deduction &mdash; but it ignores bonuses, and Japan withholds monthly tax from a published table rather than by annualising, so it will not match a payslip exactly. Enter the figure from your payslip whenever you have it.</p>
+          <p>Used only when Income Tax is left blank. It annualises Basic + Allowance + Overtime (Transportation is excluded, as commuting allowance is not taxable), subtracts the employment-income deduction, then social insurance and the basic deduction, applies the tax brackets with the surtax, and divides by twelve.</p>
+          <p class="help-warn">Treat this as a rough guide &mdash; it ignores bonuses and will not match a payslip exactly. Enter the figure from your payslip whenever you have it.</p>
         </section>
 
         <section class="panel help-panel">
@@ -428,8 +428,23 @@
         </section>
 
         <section class="panel help-panel">
+          <h3>Finance Tracker on the web</h3>
+          <p>The same app runs in a browser at <strong>finance-records.web.app</strong>, so the records you keep here are with you on a phone, a tablet, or someone else&rsquo;s computer.</p>
+          <dl class="help-list">
+            <dt>Getting your records there</dt>
+            <dd>Sign in with the same Google account in both places and they carry across. A record edited in two places keeps whichever was saved last.</dd>
+            <dt>Without signing in</dt>
+            <dd>Export a JSON backup here and import it there. That moves everything, including archived salary sheets and bill files, which sync never uploads.</dd>
+            <dt>On a phone</dt>
+            <dd>The web version installs like an app: Share &rsaquo; <em>Add to Home Screen</em> on iPhone and iPad, or Chrome&rsquo;s menu &rsaquo; <em>Install app</em> on Android. It then opens from your home screen with its own icon.</dd>
+          </dl>
+          <p><button type="button" id="openWebVersion" class="web-app-link">Open finance-records.web.app</button></p>
+          <p class="help-note">The link opens in your usual browser &mdash; this app never browses the web itself.</p>
+        </section>
+
+        <section class="panel help-panel">
           <h3>Your data</h3>
-          <p>Everything is stored in finance-data.json on this Mac. Nothing is uploaded. Export a backup regularly &mdash; and before clearing anything.</p>
+          <p>Everything is stored in finance-data.json on this Mac. Signed out, nothing leaves it; signed in, financial records sync to your own account while salary sheets and bill files stay here. Export a backup regularly &mdash; and before clearing anything.</p>
         </section>
       </div>
     </section>

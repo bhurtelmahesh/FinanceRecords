@@ -425,6 +425,15 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
+// The web version, opened outside the app. The renderer cannot choose where
+// this goes: the address is fixed here, and nothing else is ever passed to the
+// shell.
+const webAppUrl = 'https://finance-records.web.app/';
+ipcMain.handle('app:openWebVersion', async () => {
+  await shell.openExternal(webAppUrl);
+  return webAppUrl;
+});
+
 ipcMain.handle('data:load', () => loadData());
 ipcMain.handle('data:save', (_event, data) => {
   saveData(data);

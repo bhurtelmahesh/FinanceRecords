@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('financeApi', {
+  openWebVersion: () => ipcRenderer.invoke('app:openWebVersion'),
   load: () => ipcRenderer.invoke('data:load'),
   save: (data) => ipcRenderer.invoke('data:save', data),
   loadAccount: (uid) => ipcRenderer.invoke('account:load', uid),

@@ -260,8 +260,14 @@ function debounce(fn, wait) {
   };
 }
 
+// 'Ready' and friends say nothing a reader needs, so they stay in the live
+// region for screen readers and out of the header.
+const quietSaveStates = new Set(['Ready', 'Loading...', 'Local mode']);
+
 function setSaveState(text) {
-  document.getElementById('saveState').textContent = text;
+  const element = document.getElementById('saveState');
+  element.textContent = text;
+  element.classList.toggle('sr-only', quietSaveStates.has(text));
 }
 
 function updateSaveButton() {
@@ -3079,6 +3085,7 @@ function bindEvents() {
   document.getElementById('otQuickForm').addEventListener('submit', addQuickOtEntry);
   document.getElementById('editOtSalaryDetail').addEventListener('click', editCurrentOtSalaryDetail);
   document.getElementById('saveNow').addEventListener('click', save);
+  document.getElementById('openWebVersion')?.addEventListener('click', () => window.financeApi.openWebVersion());
   const searchInput = document.getElementById('globalSearch');
   const searchResults = document.getElementById('globalSearchResults');
   const debouncedSearch = debounce(renderGlobalSearch, 180);
