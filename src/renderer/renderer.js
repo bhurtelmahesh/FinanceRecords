@@ -1188,7 +1188,7 @@ function renderKpis() {
   const kpis = [
     ['Salary · Income', yen(actualIncome), '', `Take-home ${yen(actualTakeHome)}${projectedMonths ? ` · projected gross ${yen(projectedIncome)} · take-home ${yen(projectedTakeHome)}` : ''}`, 'tone-blue', 'salary'],
     ['Savings', yen(actualSavings), actualSavings >= 0 ? 'positive' : 'negative',
-      `Take-home ${yen(actualTakeHome)} − expenses ${yen(actualExpenses)}`, actualSavings >= 0 ? 'tone-green' : 'tone-red', 'expenses'],
+      `Take-home ${yen(actualTakeHome)} − expenses ${yen(actualExpenses)}`, actualSavings >= 0 ? 'tone-green' : 'tone-red', 'salary'],
     ['Stock · Win Total', yen(stockLatest), '',
       stockRecord ? `${yen(Math.abs(stockGap))} ${stockGap >= 0 ? 'above' : 'below'} ${stockRecord.month} target` : 'No result recorded', `tone-performance performance-${stockToneDirection} performance-intensity-${stockToneIntensity}`, 'stocks'],
     ['Outstanding Debt', yen(debtTotal), debtTotal > 0 ? 'debt' : '',
@@ -1207,13 +1207,13 @@ const chartPalettes = {
   ocean: {
     background: '#ffffff', markerSurface: '#ffffff', text: '#22313a', muted: '#5b6d76',
     grid: '#e8eff2', baseline: '#b8c8cf', hover: '#edf4f7', bonus: '#fbf5e4',
-    upcoming: '#8a9aa2', gross: '#256f8f', target: '#c98500', good: '#2e7d32',
+    upcoming: '#8a9aa2', gross: '#256f8f', savings: '#8556a8', target: '#c98500', good: '#2e7d32',
     below: '#c33f3f', goodWash: 'rgba(46, 125, 50, .16)', belowWash: 'rgba(195, 63, 63, .16)'
   },
   dark: {
     background: '#131722', markerSurface: '#131722', text: '#d1d4dc', muted: '#9aa4b2',
     grid: '#2a2e39', baseline: '#4c525e', hover: '#1e222d', bonus: '#302b22',
-    upcoming: '#8b95a5', gross: '#42a5f5', target: '#f0b53d', good: '#26a69a',
+    upcoming: '#8b95a5', gross: '#42a5f5', savings: '#b388dd', target: '#f0b53d', good: '#26a69a',
     below: '#f07070', goodWash: 'rgba(101, 200, 121, .18)', belowWash: 'rgba(240, 112, 112, .18)'
   }
 };
@@ -1515,33 +1515,39 @@ function drawMonthChart(canvas, chart, hoverIndex = -1) {
 }
 
 function salaryChart(year) {
-  const source = (state.salary || []).filter((item) => Number(item.year) === year);
+  const source = derivedSalaryRecords().filter((item) => Number(item.year) === year);
   const rows = source.map((item) => {
     const gross = Number(item.salary || 0);
     const takeHome = Number(item.takeHome ?? item.actualSavings ?? 0);
+    const upcoming = !monthHasElapsed(item, year, source);
     return {
       label: item.month,
       gross,
       takeHome,
+      savings: Number(item.actualSavings || 0),
       // How far take-home sits above (or below) its floor share of gross.
       excess: takeHome - gross * takeHomeFloor,
       bonus: isBonusMonth(item.month),
-      upcoming: !monthHasElapsed(item, year, source),
-      hasFigures: gross !== 0 || takeHome !== 0
+      upcoming,
+      hasFigures: gross !== 0 || takeHome !== 0,
+      hasSavings: !upcoming && (gross !== 0 || takeHome !== 0 || Number(item.expenseTotal || 0) !== 0)
     };
   });
   const figures = rows.filter((row) => row.hasFigures);
   const floorLabel = `${takeHomeFloor * 100}%`;
   const legend = [{ label: 'Gross income', color: chartInk.gross, marker: 'dot' }];
-  if (figures.some((row) => row.excess >= 0)) legend.push({ label: 'Take-home', color: chartInk.good, marker: 'dot' });
+  if (figures.some((row) => row.excess >= 0)) legend.push({ label: 'Net', color: chartInk.good, marker: 'dot' });
   if (figures.some((row) => row.excess < 0)) {
-    legend.push({ label: `Take-home below ${floorLabel} of gross`, color: chartInk.below, marker: 'down' });
+    legend.push({ label: `Net below ${floorLabel} of gross`, color: chartInk.below, marker: 'down' });
   }
+  if (rows.some((row) => row.hasSavings)) legend.push({ label: 'Savings', color: chartInk.savings, marker: 'dot' });
   if (figures.some((row) => row.upcoming)) legend.push({ label: 'Upcoming', color: chartInk.upcoming, dash: [4, 3] });
   const status = (excess) => (excess >= 0 ? chartInk.good : chartInk.below);
   return {
     labels: rows.map((row) => row.label),
-    valuesAt: (i) => (rows[i].hasFigures ? [rows[i].gross, rows[i].takeHome] : []),
+    valuesAt: (i) => rows[i].hasFigures
+      ? [rows[i].gross, rows[i].takeHome, ...(rows[i].hasSavings ? [rows[i].savings] : [])]
+      : [],
     // From the lowest month less ¥50k to the highest plus ¥50k, not from zero.
     axisMargin: 50000,
     bonus: rows.map((row) => row.bonus),
@@ -1556,8 +1562,12 @@ function salaryChart(year) {
       const line = (key) => columns.map((row) => (row.hasFigures
         ? { x: row.x, value: row[key], excess: key === 'takeHome' ? row.excess : 0, upcoming: row.upcoming }
         : null));
+      const savingsLine = columns.map((row) => (row.hasSavings
+        ? { x: row.x, value: row.savings, excess: 0, upcoming: false }
+        : null));
       strokeSeries(ctx, frame, line('gross'), () => chartInk.gross);
       strokeSeries(ctx, frame, line('takeHome'), status);
+      strokeSeries(ctx, frame, savingsLine, () => chartInk.savings);
       rows.forEach((row, i) => {
         if (!row.hasFigures) return;
         const x = frame.xAt(i);
@@ -1566,6 +1576,9 @@ function salaryChart(year) {
         drawMarker(ctx, x, frame.yAt(row.takeHome), {
           color: status(row.excess), shape: row.excess < 0 ? 'down' : 'dot', hollow: row.upcoming, r
         });
+        if (row.hasSavings) {
+          drawMarker(ctx, x, frame.yAt(row.savings), { color: chartInk.savings, r });
+        }
       });
     },
     tooltip(i) {
@@ -1574,10 +1587,11 @@ function salaryChart(year) {
       return {
         title: `${row.label} ${year}${row.upcoming ? ' · projected' : ''}`,
         rows: [
-          { value: yen(row.takeHome), label: 'Take-home', color: status(row.excess), dashed: row.upcoming },
+          ...(row.hasSavings ? [{ value: yen(row.savings), label: 'Savings', color: chartInk.savings }] : []),
+          { value: yen(row.takeHome), label: 'Net', color: status(row.excess), dashed: row.upcoming },
           { value: yen(row.gross), label: 'Gross income', color: chartInk.gross, dashed: row.upcoming }
         ],
-        note: share === null ? '' : `Take-home is ${share}% of gross${row.excess < 0 ? `, below ${floorLabel}` : ''}`
+        note: share === null ? '' : `Net is ${share}% of gross${row.excess < 0 ? `, below ${floorLabel}` : ''}`
       };
     }
   };
