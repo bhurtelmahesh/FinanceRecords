@@ -264,9 +264,10 @@ function debounce(fn, wait) {
 // region for screen readers and out of the header.
 const quietSaveStates = new Set(['Ready', 'Loading...', 'Local mode']);
 
-function setSaveState(text) {
+function setSaveState(text, detail = '') {
   const element = document.getElementById('saveState');
   element.textContent = text;
+  element.title = detail;
   element.classList.toggle('sr-only', quietSaveStates.has(text));
 }
 
@@ -2544,12 +2545,12 @@ async function exportRecords() {
     data: state,
     sheets: buildWorkbookSheets(normalizeLoadedData(state))
   });
-  if (output) setSaveState(`Exported: ${output}`);
+  if (output) setSaveState('Excel exported', output);
 }
 
 async function exportBackupData() {
   const output = await window.financeApi.exportBackup(state);
-  if (output) setSaveState(`Backup exported: ${output}`);
+  if (output) setSaveState('Backup exported', output);
 }
 
 function addQuickOtEntry(event) {
